@@ -1,0 +1,4 @@
+dianlight/smartmontools-sdk:
+  - .github/workflows/opencode.yml
+  - .github/workflows/opencode-review.yaml
+  - .github/workflows/opencode-triage.yaml
