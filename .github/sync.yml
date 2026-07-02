@@ -8,3 +8,7 @@ dianlight/hasos_more_modules:
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
 
+dianlight/srat:
+  - .github/workflows/opencode.yml
+  - .github/workflows/opencode-review.yaml
+  - .github/workflows/opencode-triage.yaml
