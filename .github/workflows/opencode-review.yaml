@@ -30,11 +30,11 @@ jobs:
 
             ## Mandatory output mechanism
 
-            You MUST submit your review using the `gh` CLI — do NOT post plain PR comments for inline feedback.
+            You MUST submit your review using the `gh` CLI. Do NOT call `gh pr comment` — the review body already appears as a comment on the PR.
 
-            ### Step 1 — Submit the formal review with inline comments
+            ### Submit the formal review with inline comments
 
-            Use `gh api` to create a review with inline comments attached to the exact file and line of each finding:
+            Use a single `gh api` call to create the review with all inline comments:
 
             ```bash
                         gh api \
@@ -44,7 +44,7 @@ jobs:
                           --input - <<'EOF'
                         {
                           "commit_id": "<HEAD_SHA>",
-                          "body": "<overall review body>",
+                          "body": "<summary — see format below>",
                           "event": "<APPROVE|REQUEST_CHANGES|COMMENT>",
                           "comments": [
                             {
@@ -58,24 +58,16 @@ jobs:
             ```
 
             Rules for filling the payload:
-            - `commit_id`: use the PR's HEAD SHA (retrieve it with `gh pr view {pull_number} --json headRefOid -q .headRefOid`).
-            - `event`: set to `REQUEST_CHANGES` if any 🚨 CRITICAL or ⚡ PERFORMANCE issue exists; `COMMENT` for 🛠️ QUALITY / 💡 NITPICK only; `APPROVE` if the diff is clean.
-            - `body`: one short paragraph summarising the verdict — this is the review-level body, not a repetition of inline comments.
-            - `comments[].body`: prefix every comment with the appropriate category label; include a `suggestion` block whenever a concrete fix is possible.
-            - Only include files and lines that actually have findings — no filler comments.
+            - `commit_id`: retrieve with `gh pr view {pull_number} --json headRefOid -q .headRefOid`.
+            - `event`: `REQUEST_CHANGES` if any 🚨 CRITICAL or ⚡ PERFORMANCE issue exists; `COMMENT` for 🛠️ QUALITY / 💡 NITPICK only; `APPROVE` if the diff is clean.
+            - `body`: the review-level summary, max 10 lines, structured as:
+              - Verdict and issue count per category (e.g. `🚨 2 · ⚡ 1 · 🛠️ 3 · 💡 1`).
+              - One paragraph on the most critical finding (if any).
+              - No repetition of inline comment details.
+            - `comments[].body`: prefix with the category label; include a `suggestion` block whenever a concrete fix is possible.
+            - Only include entries in `comments` for lines that actually have findings.
 
-            ### Step 2 — Post a summary PR comment
-
-            After the review is submitted, post a single separate comment using:
-
-              ```bash
-                          gh pr comment {pull_number} --body "<summary>"
-              ```
-
-            The summary must contain:
-            - Verdict and issue count per category (e.g. `🚨 2 · ⚡ 1 · 🛠️ 3 · 💡 1`).
-            - One paragraph describing the most critical finding (if any).
-            - Maximum 10 lines. No repetition of inline comments.
+            Do NOT run any other `gh` command after this call.
 
             ## Review directives
 
@@ -88,3 +80,4 @@ jobs:
             - **Be actionable**: explain *why* it is an issue and always provide a fix via `suggestion` block when a concrete change is possible.
 
             - **Noise control**: skip files with nothing to flag — no empty praise, no filler comments.
+            
