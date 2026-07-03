@@ -30,13 +30,14 @@ jobs:
             || echo '{"object":"list","data":[]}' > /tmp/go_models.json
 
           echo "→ Fetching zen models and extracting free tier..."
-          curl -sf --max-time 15 \
+          if curl -sf --max-time 15 \
             "https://opencode.ai/zen/v1/models" \
-            | python3 - << 'PYEOF'
-          import json, sys
+            -o /tmp/zen_raw.json; then
+            python3 << 'PYEOF'
+          import json
 
-          raw = sys.stdin.read()
-          data = json.loads(raw)
+          with open("/tmp/zen_raw.json") as f:
+              data = json.load(f)
           all_models  = data.get("data", [])
           free_models = [m for m in all_models if m["id"].endswith("-free")]
 
@@ -51,9 +52,8 @@ jobs:
 
           print(f"  total={len(all_models)}  free={len(free_models)}")
           PYEOF
-
-          # Fallback if curl/python fails
-          if [ ! -s /tmp/zen_models.json ]; then
+          else
+            echo "⚠ curl failed — using empty model catalog"
             echo '{"all":[],"free":[],"free_ids":[]}' > /tmp/zen_models.json
           fi
 
