@@ -6,13 +6,25 @@ on:
   pull_request_review_comment:
     types: [created]
 
+concurrency:
+  group: opencode-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   opencode:
     if: |
-      contains(github.event.comment.body, ' /oc') ||
-      startsWith(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, ' /opencode') ||
-      startsWith(github.event.comment.body, '/opencode')
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      github.event.comment.user.login != 'opencode-agent[bot]' &&
+      github.event.comment.user.login != 'coderabbitai[bot]' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      (
+        contains(github.event.comment.body, ' /oc') ||
+        startsWith(github.event.comment.body, '/oc') ||
+        contains(github.event.comment.body, ' /opencode') ||
+        startsWith(github.event.comment.body, '/opencode') ||
+        contains(github.event.issue.labels.*.name, 'opencode:awaiting-response') ||
+        contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response')
+      )
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -44,9 +56,47 @@ jobs:
             - Triggered by comment/body: "${{ github.event.comment.body || github.event.issue.body }}"
 
             ## Language
-            Always write ALL comments, analysis, and communication in English,
-            regardless of the language used in the issue/PR title, description, or
-            comments. Never switch language to match the user.
+            Default to the language of the issue/PR title or first substantive
+            comment. If you can communicate clearly and accurately in that
+            language, use it for all your comments and analysis. If that language
+            is not one you can reliably use (or you're unsure), respond in English
+            and politely note the limitation in one short sentence. Always
+            prioritize the user's ability to understand you over any fixed
+            language rule. Stay consistent with the language you choose across all
+            comments in the same issue/PR thread.
+
+            ## Trigger awareness
+            This run may have been triggered either by an explicit command
+            (a comment containing `/oc` or `/opencode`) or automatically, because
+            the issue/PR carries the `opencode:awaiting-response` label from a
+            previous run of yours that asked a question or proposed a solution.
+            In the latter case, treat the most recent human comment(s) since your
+            last comment as the response to what you asked — evaluate whether it
+            actually answers your open questions or approves/adjusts your proposal
+            before deciding how to proceed. If the new comment is unrelated to your
+            pending question (e.g. off-topic chatter), politely note that you're
+            still waiting for an answer to your specific question(s) and restate
+            them briefly, without repeating the entire previous comment.
+
+            ## Managing the `opencode:awaiting-response` label
+            You are responsible for keeping this label in sync with your state:
+            - After Phase 4 (asking clarification questions): ensure the label
+              `opencode:awaiting-response` is applied to the issue/PR (add it if
+              missing) via `gh issue edit <number> --add-label "opencode:awaiting-response"`
+              or `gh pr edit <number> --add-label "opencode:awaiting-response"`.
+            - After Phase 5 (proposing a solution, awaiting approval): ensure the
+              same label remains applied — you are still waiting on the human.
+            - At the start of Phase 6, once implementation is confirmed and
+              actually begins: remove the label
+              (`gh issue edit <number> --remove-label "opencode:awaiting-response"`
+              or the `gh pr edit` equivalent), since you're no longer waiting on
+              anyone.
+            - If a human explicitly declines/rejects the proposal or closes the
+              discussion, also remove the label — there's nothing left to wait for.
+            - If the label doesn't exist yet in the repository, create it first
+              with `gh label create "opencode:awaiting-response" --color FBCA04
+              --description "Waiting on a human response to opencode" || true`
+              (the `|| true` avoids failing if it already exists).
 
             Follow these phases in order. Do not skip a phase.
 
@@ -115,7 +165,8 @@ jobs:
             7. A closing line explicitly asking for confirmation before implementation
                begins, e.g. "Reply with approval (e.g. 'approved', 'go ahead',
                '@opencode implement this') if you'd like me to implement this
-               solution, or share feedback if you'd like adjustments first."
+               solution — the full proposed scope above unless you say otherwise —
+               or share feedback if you'd like adjustments first."
             8. STOP. Do not implement anything in this run.
 
             ### Phase 6 — Implement (only if explicitly approved)
@@ -124,11 +175,19 @@ jobs:
               issue/PR comment history for it).
             - Since that proposal, a human reviewer has posted an explicit,
               unambiguous approval (e.g. "approved", "go ahead", "LGTM, implement
-              it", "/opencode implement this"). A vague or ambiguous reply, a
+              it", "@opencode implement this"). A vague or ambiguous reply, a
               question, or silence does NOT count as approval.
             - If the approval also requests changes to the proposal, treat it as
               feedback, not approval: update the proposal in a new comment (back to
               Phase 5 logic) and wait again.
+
+            **Scope of approval:** unless the reviewer explicitly bounds it (e.g.
+            "approved, but skip the migration script" or "just do the fix in
+            file X, not the refactor"), approval covers the entire proposed scope
+            from Phase 5 — all listed files/functions, tests, and any migration or
+            docs changes. If the reviewer's comment narrows the scope, implement
+            only the narrowed part and note in your summary comment (Phase 6,
+            final step) what was intentionally left out per their instructions.
 
             If approval is confirmed:
             - Implement the solution exactly as proposed (or as subsequently
@@ -140,20 +199,19 @@ jobs:
             - Write or update tests as planned.
             - Commit with a clear, conventional commit message; open or update the
               PR as appropriate.
-            - Post a short comment summarizing what was implemented and linking the
-              commit(s)/PR.
+            - Post a short comment summarizing what was implemented, noting any
+              scope intentionally excluded per reviewer instructions, and linking
+              the commit(s)/PR.
 
             If any condition above is not met, do not implement — instead, post a
-            comment (in English) explaining what explicit confirmation you're
-            waiting for, and STOP.
+            comment explaining what explicit confirmation you're waiting for, and
+            STOP.
 
             ## Constraints
             - Never guess at repository conventions — verify them by reading actual
               code first.
             - Keep all comments well-formatted Markdown (headers, bullet lists, code
               blocks); they must be easy to scan.
-            - All output must be in English, even if the issue/PR is in another
-              language.
             - If you already asked a clarification question in a previous run and it
               is still unanswered, do not repeat it — wait, or gently follow up only
               if significant new information has appeared in the thread.
@@ -162,4 +220,6 @@ jobs:
               minimize the surface area of change, and prefer the simplest solution
               that fully addresses the problem.
             - Never implement code before Phase 6, and never implement in Phase 6
-              without meeting all of its approval conditions.            
+              without meeting all of its approval conditions. 
+
+              
