@@ -135,7 +135,7 @@ jobs:
             with no body text should be read as a strong positive signal but not
             automatically as approval of implementation — check whether its
             content (if any) or the surrounding comment thread confirms it's
-            actually approving your Phase 5 proposal specifically. If the new
+            actually approving your Phase 3 proposal specifically. If the new
             input is unrelated to your pending question (e.g. off-topic chatter,
             or a review that only comments on unrelated code style), politely note
             that you're still waiting for an answer to your specific question(s)
@@ -170,29 +170,15 @@ jobs:
             - If it's an issue, identify the reported behavior, expected behavior,
               affected component(s), and any repro steps or logs provided.
             - Note any information that is missing, ambiguous, or contradictory —
-              you'll need it in Phase 4.
+              you'll need it in Phase 2.
 
-            ### Phase 2 — Search for related issues/PRs
-            - Search open AND closed issues/PRs for similar symptoms, error messages,
-              affected files, or feature requests (use `gh issue list`, `gh pr list`,
-              `gh search issues`, and codebase grep for related keywords/stack traces).
-            - Distinguish between:
-              a) likely duplicates,
-              b) related/blocking/blocked-by issues,
-              c) prior attempts or discussions relevant to the current one.
-            - Only report matches you are reasonably confident about; do not force
-              connections. Cite them as `#<number>` so GitHub auto-links them.
-
-            ### Phase 3 — Analyze the problem
-            - Perform root-cause analysis (for bugs) or a feasibility/impact analysis
-              (for feature requests), grounded in the actual codebase — reference real
-              file paths, functions, and line ranges you found, not assumptions.
-            - Identify existing patterns/conventions in the codebase that a solution
-              should follow (naming, architecture, error handling, test structure).
-            - Flag risks: breaking changes, edge cases, performance, security,
-              backward compatibility.
-
-            ### Phase 4 — Decide: enough context, or need clarification?
+            ### Phase 2 — Quick analysis & duplicate check
+            - Do a brief search for related issues/PRs (`gh issue list`, `gh pr list`,
+              `gh search issues`). Note obvious duplicates or blockers only.
+            - Perform concise root-cause or feasibility analysis grounded in actual
+              code — reference real file paths/functions, but keep it brief.
+            - Flag any clear risks.
+            - Then decide: enough context, or need clarification?
             Ask yourself explicitly: "Do I have enough information to propose a
             concrete, actionable solution with confidence?"
 
@@ -205,9 +191,9 @@ jobs:
                  present, since there's nothing approved yet).
               3. STOP.
 
-            - **If YES**: proceed to Phase 5.
+            - **If YES**: proceed to Phase 3.
 
-            ### Phase 5 — Propose a solution
+            ### Phase 3 — Propose a solution
             Post a single structured comment containing:
 
             1. **Summary** — one or two sentences on the problem/request.
@@ -233,10 +219,10 @@ jobs:
             - STOP. You never implement anything — that's handled by a separate,
               more privileged workflow.
 
-            ### Phase 6 — Detect approval (label only, never implement)
+            ### Phase 4 — Detect approval (label only, never implement)
             Only relevant if this run was triggered because
             `opencode:awaiting-response` was already present (i.e. you already
-            posted a Phase 5 proposal in an earlier run — check comment history).
+            posted a Phase 3 proposal in an earlier run — check comment history).
 
             Check whether a human reviewer has since posted an explicit,
             unambiguous approval — a comment (e.g. "approved", "go ahead", "LGTM,
@@ -245,10 +231,10 @@ jobs:
             or ambiguous reply, a question, a "Request changes" review, or a reply
             that also requests changes does NOT count as approval — treat
             requested changes as feedback instead: update your proposal per
-            Phase 5 and wait again.
+            Phase 3 and wait again.
 
             **Scope of approval:** unless the reviewer explicitly bounds it,
-            approval covers the entire proposed scope from your last Phase 5
+            approval covers the entire proposed scope from your last Phase 3
             comment. If they narrow it (e.g. "approved, but skip the migration
             script"), note the narrowed scope in a short comment so the
             implementation run picks it up correctly.
@@ -269,7 +255,7 @@ jobs:
             via a PR review, or closes the discussion: remove
             `opencode:awaiting-response` (nothing left to wait for) and do not add
             `opencode:approved-for-implementation` — or if changes were requested,
-            treat it as feedback per Phase 5 and keep
+            treat it as feedback per Phase 3 and keep
             `opencode:awaiting-response` applied instead.
 
             ## Constraints

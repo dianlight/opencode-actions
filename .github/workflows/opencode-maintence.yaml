@@ -3,12 +3,12 @@ name: OpenCode Maintenance
 on:
   schedule:
     # Runs every 7 days (at 00:00 on the 1st, 8th, 15th, 22nd, and 29th of the month)
-    - cron: '0 0 */7 * *'
+    - cron: "0 0 */7 * *"
   workflow_dispatch: # Allows manual triggering from the GitHub UI
 
 # Minimum permissions required for OpenCode to read files and manage Issues
 permissions:
-  contents: read
+  contents: write
   issues: write
   id-token: write
 
@@ -188,9 +188,12 @@ jobs:
       # ── d · Run opencode model audit ────────────────────────────────────
       - name: Run model audit via opencode
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: opencode/nemotron-3-ultra-free
-          use_github_token: 'true'
+          use_github_token: "true"
           prompt: |
             # Task: Audit OpenCode Model Configuration Across Workflows
 
@@ -316,3 +319,174 @@ jobs:
             - Be factual and cite LiveBench scores. Do not invent numbers.
             - Keep issue body under 150 lines.
             - Do not create any issue other than the one described above.
+
+      # ── e · Update README.md with model recommendation table ──────────
+      - name: Update README.md with model recommendations
+        env:
+          LIVEBENCH_FETCHED: ${{ steps.livebench.outputs.fetched }}
+          LIVEBENCH_SOURCE: ${{ steps.livebench.outputs.source }}
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+
+          LIVEBENCH_FETCHED = os.environ.get("LIVEBENCH_FETCHED", "false")
+          LIVEBENCH_SOURCE  = os.environ.get("LIVEBENCH_SOURCE", "")
+
+          # ── Reference baseline: task type → recommended models ──────────
+          REFERENCE = [
+              ("issue-triage",         "deepseek-v4-flash-free", "deepseek-v4-flash"),
+              ("issue-implementation", "north-mini-code-free",   "kimi-k2.7-code"),
+              ("pr-review",            "nemotron-3-ultra-free",  "deepseek-v4-pro"),
+              ("code-implementation",  "north-mini-code-free",   "kimi-k2.7-code"),
+              ("frontend-design",      "mimo-v2.5-free",         "mimo-v2-omni"),
+              ("frontend-testing",     "north-mini-code-free",   "kimi-k2.7-code"),
+              ("api-testing",          "deepseek-v4-flash-free", "deepseek-v4-flash"),
+          ]
+
+          # All unique models we care about
+          ALL_MODELS = sorted(set(
+              m for _, free_m, go_m in REFERENCE for m in (free_m, go_m)
+          ))
+
+          # ── Parse LiveBench data if available ───────────────────────────
+          scores = {}  # model_name_lower -> {"overall": ..., "coding": ..., "reasoning": ...}
+          lb_note = ""
+
+          try:
+              with open("/tmp/livebench_raw.json") as f:
+                  lb = json.load(f)
+          except (FileNotFoundError, json.JSONDecodeError):
+              lb = {}
+
+          if isinstance(lb, dict) and "note" not in lb:
+              # Attempt format: dict of model_name -> {overall, coding, ...}
+              for model_name, data in lb.items():
+                  if isinstance(data, dict) and isinstance(model_name, str):
+                      key = model_name.lower()
+                      overall   = data.get("overall") or data.get("Overall") or data.get("average")
+                      coding    = data.get("coding") or data.get("Coding")
+                      reasoning = data.get("reasoning") or data.get("Reasoning")
+                      if overall is not None:
+                          scores[key] = {
+                              "overall":   round(float(overall), 1),
+                              "coding":    round(float(coding), 1) if coding else None,
+                              "reasoning": round(float(reasoning), 1) if reasoning else None,
+                          }
+          elif isinstance(lb, list):
+              # Attempt format: array of {model: ..., overall: ..., ...}
+              for entry in lb:
+                  if isinstance(entry, dict):
+                      name = entry.get("model") or entry.get("name") or entry.get("id") or ""
+                      key = name.lower()
+                      overall   = entry.get("overall") or entry.get("Overall") or entry.get("average")
+                      coding    = entry.get("coding") or entry.get("Coding")
+                      reasoning = entry.get("reasoning") or entry.get("Reasoning")
+                      if overall is not None:
+                          scores[key] = {
+                              "overall":   round(float(overall), 1),
+                              "coding":    round(float(coding), 1) if coding else None,
+                              "reasoning": round(float(reasoning), 1) if reasoning else None,
+                          }
+
+          if not scores:
+              lb_note = "LiveBench data unavailable or did not contain expected model keys"
+
+          # Helper: format a score cell
+          def fmt_score(model_name, subscore):
+              key = model_name.lower()
+              if key in scores and scores[key].get(subscore) is not None:
+                  return str(scores[key][subscore])
+              return "—"
+
+          # ── Generate model recommendation table ─────────────────────────
+          header  = "| Task Type | Suggested Free Model | Score (Overall) | Suggested Go Model | Score (Overall) |"
+          sep     = "|-----------|----------------------|-----------------|--------------------|-----------------|"
+          rows = []
+          for task_type, free_model, go_model in REFERENCE:
+              free_score = fmt_score(free_model, "overall")
+              go_score   = fmt_score(go_model, "overall")
+              rows.append(f"| `{task_type}` | `{free_model}` | {free_score} | `{go_model}` | {go_score} |")
+
+          table = "\n".join([header, sep] + rows)
+
+          # ── Build the full Model Recommendations section ────────────────
+          date_str = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
+
+          lines = ["""## Model Recommendations
+
+          > Automatically updated by the `opencode-maintenance` workflow.
+          > Last updated: **{date}**.
+          > LiveBench data: **{livebench_status}**.
+          
+          This table shows the recommended model per task type, following a **free-first**
+          policy: the free model is preferred unless a paid (Go) model offers a
+          meaningfully higher score for the task.
+          
+          {table}
+          
+          ### Score Reference
+          
+          | Model | Tier | Overall | Coding | Reasoning |
+          |-------|------|---------|--------|-----------|""".format(
+                date=date_str,
+                livebench_status=(
+                    f"fetched from [{LIVEBENCH_SOURCE}]({LIVEBENCH_SOURCE})"
+                    if LIVEBENCH_FETCHED == "true" and LIVEBENCH_SOURCE
+                    else "based on model training knowledge"
+                ),
+                table=table,
+            ))
+          
+                    # Score detail rows for each unique model
+                    for model in ALL_MODELS:
+                        tier = "Go (paid)" if not model.endswith("-free") else "Free"
+                        ov = fmt_score(model, "overall")
+                        cd = fmt_score(model, "coding")
+                        rn = fmt_score(model, "reasoning")
+                        lines.append(f"| `{model}` | {tier} | {ov} | {cd} | {rn} |")
+          
+                    lines.append("")
+                    if lb_note:
+                        lines.append(f"> {lb_note}")
+                    lines.append("")
+          
+                    section = "\n".join(lines)
+          
+                    # ── Update README.md ────────────────────────────────────────────
+                    readme_path = "README.md"
+          
+                    if os.path.exists(readme_path):
+                        with open(readme_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+          
+                        # Replace existing section or append
+                        marker_start = "## Model Recommendations"
+                        if marker_start in content:
+                            before = content.split(marker_start)[0]
+                            content = before.rstrip("\n") + "\n\n" + section
+                        else:
+                            content = content.rstrip("\n") + "\n\n" + section
+                    else:
+                        content = f"# opencode-actions\n\n{section}"
+          
+                    with open(readme_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+          
+                    print("✓ README.md updated with model recommendation table")
+                    print(f"  LiveBench scores parsed for {len(scores)} model(s)")
+                    print(f"  Note: {lb_note}" if lb_note else "  All scores from LiveBench")
+                    PYEOF
+          
+                # ── f · Commit README.md changes ─────────────────────────────────────
+                - name: Commit README.md if changed
+                  run: |
+                    git config user.name "opencode-maintenance[bot]"
+                    git config user.email "opencode-maintenance[bot]@users.noreply.github.com"
+                    git add README.md
+                    if git diff --cached --quiet; then
+                      echo "ℹ No changes to README.md"
+                    else
+                      git commit -m "📝 docs: update model recommendation table"
+                      git push
+                      echo "✓ README.md updated and committed"
+                    fi
