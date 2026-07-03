@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 jobs:
-model-audit:
+  model-audit:
     name: Model Audit
     runs-on: ubuntu-latest
     steps:
