@@ -157,16 +157,23 @@ jobs:
           FETCHED=false
           SOURCE=""
 
+          # LiveBench publishes monthly CSV snapshots at livebench.ai/table_YYYY_MM_DD.csv
+          # Try current month first, then fall back to previous months
+          DATE=$(date -u +%Y_%m_%d)
           URLS=(
+            "https://livebench.ai/table_${DATE}.csv"
+            # Fallback to known recent snapshots
+            "https://livebench.ai/table_2026_01_08.csv"
+            "https://livebench.ai/table_2025_12_08.csv"
+            "https://livebench.ai/table_2025_11_08.csv"
+            # GitHub raw fallbacks (JSON)
             "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/all_models_df.json"
             "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/leaderboard.json"
-            "https://livebench.ai/leaderboard_full_details_table.json"
-            "https://livebench.ai/livebench_results.json"
           )
 
           for URL in "${URLS[@]}"; do
-            if curl -sf --max-time 15 "$URL" -o /tmp/livebench_raw.json 2>/dev/null; then
-              FILE_SIZE=$(wc -c < /tmp/livebench_raw.json)
+            if curl -sf --max-time 15 "$URL" -o /tmp/livebench_raw.csv 2>/dev/null; then
+              FILE_SIZE=$(wc -c < /tmp/livebench_raw.csv)
               if [ "$FILE_SIZE" -gt 100 ]; then
                 echo "✓ LiveBench data fetched from: $URL (${FILE_SIZE} bytes)"
                 FETCHED=true
@@ -180,6 +187,42 @@ jobs:
             echo "⚠ Could not fetch LiveBench data; model will use training knowledge."
             echo '{"note":"LiveBench data unavailable at fetch time — use training knowledge from https://livebench.ai"}' \
               > /tmp/livebench_raw.json
+          else
+            # Convert CSV to JSON for downstream Python parsing
+            python3 << 'PYEOF'
+          import csv, json, sys
+
+          with open("/tmp/livebench_raw.csv", "r", encoding="utf-8") as f:
+              reader = csv.DictReader(f)
+              rows = list(reader)
+
+          # Expected columns: Model, Overall, Coding, Reasoning, ...
+          # Build a dict keyed by model name for easy lookup
+          result = {}
+          for row in rows:
+              model = row.get("Model") or row.get("model") or row.get("Name")
+              if not model:
+                  continue
+              def to_float(v):
+                  try:
+                      return float(v) if v != "" else None
+                  except (ValueError, TypeError):
+                      return None
+              overall   = to_float(row.get("Overall") or row.get("overall"))
+              coding    = to_float(row.get("Coding") or row.get("coding"))
+              reasoning = to_float(row.get("Reasoning") or row.get("reasoning"))
+              if overall is not None:
+                  result[model] = {
+                      "overall":   overall,
+                      "coding":    coding,
+                      "reasoning": reasoning,
+                  }
+
+          with open("/tmp/livebench_raw.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, indent=2)
+
+          print(f"  Converted {len(result)} models from CSV to JSON")
+          PYEOF
           fi
 
           echo "fetched=${FETCHED}"   >> "$GITHUB_OUTPUT"
@@ -417,15 +460,15 @@ jobs:
           > Automatically updated by the `opencode-maintenance` workflow.
           > Last updated: **{date}**.
           > LiveBench data: **{livebench_status}**.
-          
+
           This table shows the recommended model per task type, following a **free-first**
           policy: the free model is preferred unless a paid (Go) model offers a
           meaningfully higher score for the task.
-          
+
           {table}
-          
+
           ### Score Reference
-          
+
           | Model | Tier | Overall | Coding | Reasoning |
           |-------|------|---------|--------|-----------|""".format(
                 date=date_str,
@@ -436,7 +479,7 @@ jobs:
                 ),
                 table=table,
             ))
-          
+
                     # Score detail rows for each unique model
                     for model in ALL_MODELS:
                         tier = "Go (paid)" if not model.endswith("-free") else "Free"
@@ -444,21 +487,21 @@ jobs:
                         cd = fmt_score(model, "coding")
                         rn = fmt_score(model, "reasoning")
                         lines.append(f"| `{model}` | {tier} | {ov} | {cd} | {rn} |")
-          
+
                     lines.append("")
                     if lb_note:
                         lines.append(f"> {lb_note}")
                     lines.append("")
-          
+
                     section = "\n".join(lines)
-          
+
                     # ── Update README.md ────────────────────────────────────────────
                     readme_path = "README.md"
-          
+
                     if os.path.exists(readme_path):
                         with open(readme_path, "r", encoding="utf-8") as f:
                             content = f.read()
-          
+
                         # Replace existing section or append
                         marker_start = "## Model Recommendations"
                         if marker_start in content:
@@ -468,15 +511,15 @@ jobs:
                             content = content.rstrip("\n") + "\n\n" + section
                     else:
                         content = f"# opencode-actions\n\n{section}"
-          
+
                     with open(readme_path, "w", encoding="utf-8") as f:
                         f.write(content)
-          
+
                     print("✓ README.md updated with model recommendation table")
                     print(f"  LiveBench scores parsed for {len(scores)} model(s)")
                     print(f"  Note: {lb_note}" if lb_note else "  All scores from LiveBench")
                     PYEOF
-          
+
                 # ── f · Commit README.md changes ─────────────────────────────────────
                 - name: Commit README.md if changed
                   run: |
