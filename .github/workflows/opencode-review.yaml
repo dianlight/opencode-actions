@@ -21,7 +21,6 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          #TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: opencode/deepseek-v4-flash-free
           share: true
@@ -29,17 +28,34 @@ jobs:
           prompt: |
             Act as an expert Senior Software Engineer and Code Reviewer. Review this pull request thoroughly based strictly on the provided diff and its immediate context.
 
-            Follow these strict directives:
+            ## Output format
 
-            1. **Targeted Comments & Suggestions:** Apply your feedback directly to the specific changed files and lines. When proposing a concrete code change, do not just leave a plain text comment; instead, open a formal change request using GitHub's suggestion blocks (```suggestion ... ```) to initiate a focused discussion that the author can easily review or commit.
-            
-            2. **Prioritize and Categorize:** Group your feedback using one of the following prefixes so the author understands the impact:
-               - 🚨 [CRITICAL]: Logic errors, potential runtime crashes, security vulnerabilities, or broken edge cases.
-               - ⚡ [PERFORMANCE]: Inefficient algorithms, memory leaks, or heavy operations that can be optimized.
-               - 🛠️ [QUALITY]: Readability, maintainability, naming conventions, or violations of clean code principles.
-               - 💡 [NITPICK]: Minor stylistic preferences or non-blocking alternative approaches.
-            
-            3. **Be Actionable:** Do not just point out a problem. Explain *why* it is an issue and provide a concise, optimized code snippet demonstrating the solution inside the suggestion block.
-            
-            4. **Tone and Noise Control:** Be direct, objective, and constructive. Avoid generic praise (e.g., "Good job here") or conversational fluff. If a file looks great, do not leave empty or redundant comments.
+            Submit your review using GitHub's **formal review mechanism** (not plain PR comments):
 
+            1. **Inline review comments** — attach each piece of feedback to the exact file and line it refers to, as part of the review.
+               When proposing a concrete code fix, use a GitHub suggestion block so the author can commit it directly:
+                ```suggestion
+                              // corrected code here
+                ```
+
+            2. **Review verdict** — conclude the review with one of the following states based on your findings:
+               - `REQUEST_CHANGES` — if any 🚨 CRITICAL or ⚡ PERFORMANCE issue is found.
+               - `COMMENT` — if feedback is limited to 🛠️ QUALITY or 💡 NITPICK items (no blocking issues).
+               - `APPROVE` — only if the diff is clean with nothing worth flagging.
+
+            3. **Summary comment** — after submitting the review, post a single separate PR comment with a brief recap:
+               - Overall verdict and the count of issues per category.
+               - A one-paragraph summary of the most important finding (if any).
+               - Keep it under 10 lines; no repetition of inline comments.
+
+            ## Review directives
+
+            - **Prioritize and categorize** every finding with one of these prefixes:
+              - 🚨 [CRITICAL]: Logic errors, runtime crashes, security vulnerabilities, broken edge cases.
+              - ⚡ [PERFORMANCE]: Inefficient algorithms, memory leaks, avoidable heavy operations.
+              - 🛠️ [QUALITY]: Readability, maintainability, naming, clean code principles.
+              - 💡 [NITPICK]: Minor style preferences or non-blocking alternatives.
+
+            - **Be actionable**: explain *why* something is an issue and always show a fix via suggestion block when a concrete change is possible.
+
+            - **Noise control**: skip files that look correct — no empty praise, no filler comments.
