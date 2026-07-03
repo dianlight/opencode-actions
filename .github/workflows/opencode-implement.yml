@@ -12,7 +12,12 @@ concurrency:
 
 jobs:
   implement:
-    if: github.event.label.name == 'opencode:approved-for-implementation'
+    if: |
+      github.event.label.name == 'opencode:approved-for-implementation' &&
+      github.event.sender.login == 'github-actions[bot]' &&
+      !contains(github.event.issue.labels.*.name, 'opencode:awaiting-response') &&
+      !contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response') &&
+      (github.event.issue.state == 'open' || github.event.pull_request.state == 'open')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
