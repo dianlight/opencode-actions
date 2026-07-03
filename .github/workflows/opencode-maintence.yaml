@@ -189,7 +189,7 @@ model-audit:
       - name: Run model audit via opencode
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         with:
-          model: nemotron-3-ultra-free
+          model: opencode/nemotron-3-ultra-free
           use_github_token: 'true'
           prompt: |
             # Task: Audit OpenCode Model Configuration Across Workflows
