@@ -1,0 +1,318 @@
+name: OpenCode Maintenance
+
+on:
+  schedule:
+    # Runs every 7 days (at 00:00 on the 1st, 8th, 15th, 22nd, and 29th of the month)
+    - cron: '0 0 */7 * *'
+  workflow_dispatch: # Allows manual triggering from the GitHub UI
+
+# Minimum permissions required for OpenCode to read files and manage Issues
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+model-audit:
+    name: Model Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── a · Fetch current opencode model catalog ────────────────────────
+      - name: Fetch opencode model catalog
+        id: models
+        run: |
+          echo "→ Fetching go (paid) models..."
+          curl -sf --max-time 15 \
+            "https://opencode.ai/zen/go/v1/models" \
+            -o /tmp/go_models.json \
+            || echo '{"object":"list","data":[]}' > /tmp/go_models.json
+
+          echo "→ Fetching zen models and extracting free tier..."
+          curl -sf --max-time 15 \
+            "https://opencode.ai/zen/v1/models" \
+            | python3 - << 'PYEOF'
+          import json, sys
+
+          raw = sys.stdin.read()
+          data = json.loads(raw)
+          all_models  = data.get("data", [])
+          free_models = [m for m in all_models if m["id"].endswith("-free")]
+
+          result = {
+              "all":  all_models,
+              "free": free_models,
+              "free_ids": [m["id"] for m in free_models],
+          }
+
+          with open("/tmp/zen_models.json", "w") as f:
+              json.dump(result, f, indent=2)
+
+          print(f"  total={len(all_models)}  free={len(free_models)}")
+          PYEOF
+
+          # Fallback if curl/python fails
+          if [ ! -s /tmp/zen_models.json ]; then
+            echo '{"all":[],"free":[],"free_ids":[]}' > /tmp/zen_models.json
+          fi
+
+          FREE_COUNT=$(python3 -c \
+            "import json; d=json.load(open('/tmp/zen_models.json')); print(len(d['free']))")
+          echo "free_count=${FREE_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "✓ Free models found: ${FREE_COUNT}"
+
+      # ── b · Scan all workflows for anomalyco/opencode usage ────────────
+      - name: Scan workflows for opencode usage
+        id: scan
+        run: |
+          python3 << 'PYEOF'
+          import os, json, glob, sys
+
+          try:
+              import yaml
+          except ImportError:
+              import subprocess
+              subprocess.run([sys.executable, "-m", "pip", "install", "pyyaml", "-q"],
+                             check=True)
+              import yaml
+
+          SELF_NAMES = {"opencode-maintenance"}
+          WORKFLOW_DIR = ".github/workflows"
+          results = []
+
+          if not os.path.isdir(WORKFLOW_DIR):
+              json.dump([], open("/tmp/workflow_scan.json", "w"))
+              print("0")
+              sys.exit(0)
+
+          files = glob.glob(f"{WORKFLOW_DIR}/*.yml") + glob.glob(f"{WORKFLOW_DIR}/*.yaml")
+
+          for filepath in sorted(files):
+              stem = os.path.splitext(os.path.basename(filepath))[0]
+              if stem in SELF_NAMES:
+                  continue   # skip this file
+
+              try:
+                  with open(filepath, "r", encoding="utf-8") as fh:
+                      raw = fh.read()
+
+                  if "anomalyco/opencode" not in raw:
+                      continue
+
+                  wf = yaml.safe_load(raw) or {}
+                  wf_name = wf.get("name", os.path.basename(filepath))
+
+                  for job_id, job in (wf.get("jobs") or {}).items():
+                      steps = job.get("steps") or []
+                      for idx, step in enumerate(steps):
+                          uses = (step.get("uses") or "")
+                          if "anomalyco/opencode" not in uses:
+                              continue
+                          with_block = step.get("with") or {}
+                          prompt_text = str(with_block.get("prompt") or "")
+                          results.append({
+                              "file":            filepath,
+                              "workflow_name":   wf_name,
+                              "job_id":          job_id,
+                              "job_name":        str(job.get("name") or job_id),
+                              "step_index":      idx,
+                              "step_name":       str(step.get("name") or f"step-{idx}"),
+                              "action_ref":      uses,
+                              "model":           str(with_block.get("model") or "NOT_SET"),
+                              "agent":           str(with_block.get("agent") or ""),
+                              "prompt_preview":  prompt_text[:400],
+                          })
+
+              except Exception as exc:
+                  results.append({
+                      "file":          filepath,
+                      "workflow_name": os.path.basename(filepath),
+                      "job_id":        "",
+                      "job_name":      "",
+                      "step_index":    0,
+                      "step_name":     "",
+                      "action_ref":    "",
+                      "model":         "PARSE_ERROR",
+                      "agent":         "",
+                      "prompt_preview": "",
+                      "error":         str(exc),
+                  })
+
+          with open("/tmp/workflow_scan.json", "w") as fh:
+              json.dump(results, fh, indent=2)
+
+          print(len(results))
+          PYEOF
+
+          COUNT=$(python3 -c \
+            "import json,sys; print(len(json.load(open('/tmp/workflow_scan.json'))))")
+          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+          echo "✓ opencode usages found (excl. this workflow): ${COUNT}"
+
+      # ── c · Try to fetch LiveBench leaderboard data ─────────────────────
+      - name: Fetch LiveBench leaderboard data
+        id: livebench
+        run: |
+          FETCHED=false
+          SOURCE=""
+
+          URLS=(
+            "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/all_models_df.json"
+            "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/leaderboard.json"
+            "https://livebench.ai/leaderboard_full_details_table.json"
+            "https://livebench.ai/livebench_results.json"
+          )
+
+          for URL in "${URLS[@]}"; do
+            if curl -sf --max-time 15 "$URL" -o /tmp/livebench_raw.json 2>/dev/null; then
+              FILE_SIZE=$(wc -c < /tmp/livebench_raw.json)
+              if [ "$FILE_SIZE" -gt 100 ]; then
+                echo "✓ LiveBench data fetched from: $URL (${FILE_SIZE} bytes)"
+                FETCHED=true
+                SOURCE="$URL"
+                break
+              fi
+            fi
+          done
+
+          if [ "$FETCHED" = "false" ]; then
+            echo "⚠ Could not fetch LiveBench data; model will use training knowledge."
+            echo '{"note":"LiveBench data unavailable at fetch time — use training knowledge from https://livebench.ai"}' \
+              > /tmp/livebench_raw.json
+          fi
+
+          echo "fetched=${FETCHED}"   >> "$GITHUB_OUTPUT"
+          echo "source=${SOURCE}"     >> "$GITHUB_OUTPUT"
+
+      # ── d · Run opencode model audit ────────────────────────────────────
+      - name: Run model audit via opencode
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
+        with:
+          model: nemotron-3-ultra-free
+          use_github_token: 'true'
+          prompt: |
+            # Task: Audit OpenCode Model Configuration Across Workflows
+
+            ## Context
+
+            You are auditing every GitHub Actions workflow in this repository that uses
+            the `anomalyco/opencode` action. Your goal is to determine whether each
+            workflow is using the **optimal model** for its task, following a
+            "free-first" policy: always prefer a free model (suffix `-free`) unless a
+            paid model is meaningfully better for the specific task.
+
+            ## Input files on disk
+
+            | File | Contents |
+            |------|----------|
+            | `/tmp/workflow_scan.json` | JSON array — one entry per opencode step found in other workflows. Fields: `file`, `workflow_name`, `job_id`, `job_name`, `step_name`, `action_ref`, `model`, `agent`, `prompt_preview`. |
+            | `/tmp/go_models.json` | Available **go (paid)** models from `https://opencode.ai/zen/go/v1/models`. |
+            | `/tmp/zen_models.json` | All zen models; field `"free"` lists the `-free` ones. |
+            | `/tmp/livebench_raw.json` | LiveBench leaderboard JSON if successfully fetched. If it contains `"note"`, data was unavailable — use your training knowledge of https://livebench.ai rankings instead. |
+
+            LiveBench fetch status: ${{ steps.livebench.outputs.fetched }}
+            LiveBench source URL: ${{ steps.livebench.outputs.source }}
+            opencode usages found: ${{ steps.scan.outputs.count }}
+            Free models available: ${{ steps.models.outputs.free_count }}
+
+            ## Step-by-step instructions
+
+            ### Step 1 — Read input files
+            Read `/tmp/workflow_scan.json`, `/tmp/zen_models.json`, and `/tmp/livebench_raw.json`.
+            If `workflow_scan.json` is an empty array, skip to Step 4 (no usages found).
+
+            ### Step 2 — Classify each workflow step
+            For each entry, infer the **task type** from `workflow_name`, `job_name`,
+            `step_name`, and `prompt_preview`. Map to one of:
+
+            | Task type | Signals to look for |
+            |-----------|-------------------|
+            | `issue-triage` | "triage", "label", "categorize", "route" |
+            | `issue-implementation` | "implement", "fix issue", "resolve issue" |
+            | `pr-review` | "review", "PR", "pull request", "diff" |
+            | `code-implementation` | "generate code", "refactor", "implement feature" |
+            | `frontend-design` | "UI", "design", "component", "layout", "mockup" |
+            | `frontend-testing` | "playwright", "cypress", "e2e", "frontend test" |
+            | `api-testing` | "api test", "integration test", "openapi", "postman" |
+            | `other` | everything else — describe clearly |
+
+            ### Step 3 — Score and recommend a model
+            Using LiveBench data (or training knowledge), assess the relevant
+            subscores for each task type:
+
+            - **Code tasks** (implementation, testing): prioritise coding subscore
+            - **Reasoning tasks** (PR review, audit): prioritise reasoning subscore
+            - **Classification tasks** (triage): prioritise instruction-following + speed
+            - **Multimodal tasks** (frontend design): require vision capability
+
+            **Free-first rule**: if a free model scores within **5%** of the best
+            paid model on the relevant subscores, always recommend the free model.
+
+            Reference baseline (override with LiveBench data when available):
+
+            | Task | Best free model | Best paid fallback |
+            |------|-----------------|--------------------|
+            | issue-triage | deepseek-v4-flash-free | deepseek-v4-flash |
+            | issue-implementation | north-mini-code-free | kimi-k2.7-code |
+            | pr-review | nemotron-3-ultra-free | deepseek-v4-pro |
+            | code-implementation | north-mini-code-free | kimi-k2.7-code |
+            | frontend-design | mimo-v2.5-free | mimo-v2-omni |
+            | frontend-testing | north-mini-code-free | kimi-k2.7-code |
+            | api-testing | deepseek-v4-flash-free | deepseek-v4-flash |
+
+            A model is:
+            - ✅ **Optimal** — the recommended model (or equivalent) is already in use
+            - ⚠️ **Suboptimal** — a better/cheaper model exists but current one still works
+            - ❌ **Wrong** — significant capability mismatch or paying for a model
+              when a free equivalent exists
+
+            ### Step 4 — Create or update the GitHub issue
+
+            Search for an open **or closed** issue titled **exactly**:
+            `[Model Audit] OpenCode model configuration recommendations`
+
+            - If it exists: **update the body** (do not create a duplicate).
+              Re-open it if it was closed and there are new findings.
+            - If it does not exist: **create** it.
+            - Apply labels `maintenance` and `ai-config`; create them if missing
+              (colors: #6b7280 and #8b5cf6 respectively).
+
+            #### Issue body template
+
+            ```markdown
+                        ## OpenCode Model Audit — YYYY-MM-DD
+
+                        > Automated audit by the `opencode-maintenance` workflow.
+                        > LiveBench data: [fetched from URL | based on model training knowledge]
+
+                        ### Summary
+                        <One concise paragraph: number of workflows checked, discrepancies found.>
+
+                        ### Workflow Analysis
+
+                        | Workflow | Job | Step | Current Model | Recommended | Task Type | Status |
+                        |----------|-----|------|---------------|-------------|-----------|--------|
+                        | ...      | ... | ...  | ...           | ...         | ...       | ✅/⚠️/❌ |
+
+                        _Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong_
+
+                        ### LiveBench Score Reference
+                        <Compact table: model name, overall, coding, reasoning scores.>
+
+                        ### Recommended Changes
+                        <For each ⚠️/❌: exact `model:` value, file path, one-sentence justification.>
+
+                        ---
+                        *Audit runs every Monday. Trigger manually via `workflow_dispatch`.*
+            ```
+
+            #### Special cases
+            - **No discrepancies** (all ✅): comment "✅ All configs optimal as of YYYY-MM-DD" and **close** the issue.
+            - **No opencode usages**: note in body; close if open.
+            - **Parse errors**: list affected files, ask human to review.
+
+            ### Final rules
+            - Be factual and cite LiveBench scores. Do not invent numbers.
+            - Keep issue body under 150 lines.
+            - Do not create any issue other than the one described above.
