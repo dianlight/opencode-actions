@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-07-04T13:09:07.363690+00:00",
+  "livebench_snapshot": "2026_01_08",
+  "livebench_source": "https://livebench.ai/table_2026_01_08.csv",
+  "livebench_models": 127,
+  "free_models": 4,
+  "go_models": 20,
+  "workflows_audited": 3,
+  "steps_audited": 3,
+  "results": [
+    {
+      "file": ".github/workflows/opencode-implement.yaml",
+      "workflow": "opencode-implement",
+      "job": "implement",
+      "step": "Run opencode (implementation only)",
+      "task_type": "issue-implementation",
+      "current_model": "opencode/deepseek-v4-flash-free",
+      "recommended_free": "deepseek-v4-flash-free",
+      "recommended_go": "glm-5.2",
+      "status": "\u2705"
+    },
+    {
+      "file": ".github/workflows/opencode-review.yaml",
+      "workflow": "opencode-review",
+      "job": "review",
+      "step": "step-1",
+      "task_type": "pr-review",
+      "current_model": "opencode/deepseek-v4-flash-free",
+      "recommended_free": "deepseek-v4-flash-free",
+      "recommended_go": "deepseek-v4-pro",
+      "status": "\u2705"
+    },
+    {
+      "file": ".github/workflows/opencode-triage.yaml",
+      "workflow": "opencode-triage",
+      "job": "triage",
+      "step": "Run opencode (analysis & proposal only)",
+      "task_type": "issue-triage",
+      "current_model": "opencode/deepseek-v4-flash-free",
+      "recommended_free": "deepseek-v4-flash-free",
+      "recommended_go": "qwen3.7-max",
+      "status": "\u2705"
+    }
+  ]
+}

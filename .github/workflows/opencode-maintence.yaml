@@ -6,7 +6,7 @@ on:
     - cron: "0 0 */7 * *"
   workflow_dispatch: # Allows manual triggering from the GitHub UI
 
-# Minimum permissions required for OpenCode to read files and manage Issues
+# Permissions required to read files, update README.md, and manage Issues
 permissions:
   contents: write
   issues: write
@@ -19,517 +19,74 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── a · Fetch current opencode model catalog ────────────────────────
-      - name: Fetch opencode model catalog
-        id: models
-        run: |
-          echo "→ Fetching go (paid) models..."
-          curl -sf --max-time 15 \
-            "https://opencode.ai/zen/go/v1/models" \
-            -o /tmp/go_models.json \
-            || echo '{"object":"list","data":[]}' > /tmp/go_models.json
-
-          echo "→ Fetching zen models and extracting free tier..."
-          if curl -sf --max-time 15 \
-            "https://opencode.ai/zen/v1/models" \
-            -o /tmp/zen_raw.json; then
-            python3 << 'PYEOF'
-          import json
-
-          with open("/tmp/zen_raw.json") as f:
-              data = json.load(f)
-          all_models  = data.get("data", [])
-          free_models = [m for m in all_models if m["id"].endswith("-free")]
-
-          result = {
-              "all":  all_models,
-              "free": free_models,
-              "free_ids": [m["id"] for m in free_models],
-          }
-
-          with open("/tmp/zen_models.json", "w") as f:
-              json.dump(result, f, indent=2)
-
-          print(f"  total={len(all_models)}  free={len(free_models)}")
-          PYEOF
-          else
-            echo "⚠ curl failed — using empty model catalog"
-            echo '{"all":[],"free":[],"free_ids":[]}' > /tmp/zen_models.json
-          fi
-
-          FREE_COUNT=$(python3 -c \
-            "import json; d=json.load(open('/tmp/zen_models.json')); print(len(d['free']))")
-          echo "free_count=${FREE_COUNT}" >> "$GITHUB_OUTPUT"
-          echo "✓ Free models found: ${FREE_COUNT}"
-
-      # ── b · Scan all workflows for anomalyco/opencode usage ────────────
-      - name: Scan workflows for opencode usage
-        id: scan
-        run: |
-          python3 << 'PYEOF'
-          import os, json, glob, sys
-
-          try:
-              import yaml
-          except ImportError:
-              import subprocess
-              subprocess.run([sys.executable, "-m", "pip", "install", "pyyaml", "-q"],
-                             check=True)
-              import yaml
-
-          SELF_NAMES = {"opencode-maintenance"}
-          WORKFLOW_DIR = ".github/workflows"
-          results = []
-
-          if not os.path.isdir(WORKFLOW_DIR):
-              json.dump([], open("/tmp/workflow_scan.json", "w"))
-              print("0")
-              sys.exit(0)
-
-          files = glob.glob(f"{WORKFLOW_DIR}/*.yml") + glob.glob(f"{WORKFLOW_DIR}/*.yaml")
-
-          for filepath in sorted(files):
-              stem = os.path.splitext(os.path.basename(filepath))[0]
-              if stem in SELF_NAMES:
-                  continue   # skip this file
-
-              try:
-                  with open(filepath, "r", encoding="utf-8") as fh:
-                      raw = fh.read()
-
-                  if "anomalyco/opencode" not in raw:
-                      continue
-
-                  wf = yaml.safe_load(raw) or {}
-                  wf_name = wf.get("name", os.path.basename(filepath))
-
-                  for job_id, job in (wf.get("jobs") or {}).items():
-                      steps = job.get("steps") or []
-                      for idx, step in enumerate(steps):
-                          uses = (step.get("uses") or "")
-                          if "anomalyco/opencode" not in uses:
-                              continue
-                          with_block = step.get("with") or {}
-                          prompt_text = str(with_block.get("prompt") or "")
-                          results.append({
-                              "file":            filepath,
-                              "workflow_name":   wf_name,
-                              "job_id":          job_id,
-                              "job_name":        str(job.get("name") or job_id),
-                              "step_index":      idx,
-                              "step_name":       str(step.get("name") or f"step-{idx}"),
-                              "action_ref":      uses,
-                              "model":           str(with_block.get("model") or "NOT_SET"),
-                              "agent":           str(with_block.get("agent") or ""),
-                              "prompt_preview":  prompt_text[:400],
-                          })
-
-              except Exception as exc:
-                  results.append({
-                      "file":          filepath,
-                      "workflow_name": os.path.basename(filepath),
-                      "job_id":        "",
-                      "job_name":      "",
-                      "step_index":    0,
-                      "step_name":     "",
-                      "action_ref":    "",
-                      "model":         "PARSE_ERROR",
-                      "agent":         "",
-                      "prompt_preview": "",
-                      "error":         str(exc),
-                  })
-
-          with open("/tmp/workflow_scan.json", "w") as fh:
-              json.dump(results, fh, indent=2)
-
-          print(len(results))
-          PYEOF
-
-          COUNT=$(python3 -c \
-            "import json,sys; print(len(json.load(open('/tmp/workflow_scan.json'))))")
-          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
-          echo "✓ opencode usages found (excl. this workflow): ${COUNT}"
-
-      # ── c · Try to fetch LiveBench leaderboard data ─────────────────────
-      - name: Fetch LiveBench leaderboard data
-        id: livebench
-        run: |
-          FETCHED=false
-          SOURCE=""
-
-          # LiveBench publishes monthly CSV snapshots at livebench.ai/table_YYYY_MM_DD.csv
-          # Try current month first, then fall back to previous months
-          DATE=$(date -u +%Y_%m_%d)
-          URLS=(
-            "https://livebench.ai/table_${DATE}.csv"
-            # Fallback to known recent snapshots
-            "https://livebench.ai/table_2026_01_08.csv"
-            "https://livebench.ai/table_2025_12_08.csv"
-            "https://livebench.ai/table_2025_11_08.csv"
-            # GitHub raw fallbacks (JSON)
-            "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/all_models_df.json"
-            "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/leaderboard.json"
-          )
-
-          for URL in "${URLS[@]}"; do
-            if curl -sf --max-time 15 "$URL" -o /tmp/livebench_raw.csv 2>/dev/null; then
-              FILE_SIZE=$(wc -c < /tmp/livebench_raw.csv)
-              if [ "$FILE_SIZE" -gt 100 ]; then
-                echo "✓ LiveBench data fetched from: $URL (${FILE_SIZE} bytes)"
-                FETCHED=true
-                SOURCE="$URL"
-                break
-              fi
-            fi
-          done
-
-          if [ "$FETCHED" = "false" ]; then
-            echo "⚠ Could not fetch LiveBench data; model will use training knowledge."
-            echo '{"note":"LiveBench data unavailable at fetch time — use training knowledge from https://livebench.ai"}' \
-              > /tmp/livebench_raw.json
-          else
-            # Convert CSV to JSON for downstream Python parsing
-            python3 << 'PYEOF'
-          import csv, json, sys
-
-          with open("/tmp/livebench_raw.csv", "r", encoding="utf-8") as f:
-              reader = csv.DictReader(f)
-              rows = list(reader)
-
-          # Expected columns: Model, Overall, Coding, Reasoning, ...
-          # Build a dict keyed by model name for easy lookup
-          result = {}
-          for row in rows:
-              model = row.get("Model") or row.get("model") or row.get("Name")
-              if not model:
-                  continue
-              def to_float(v):
-                  try:
-                      return float(v) if v != "" else None
-                  except (ValueError, TypeError):
-                      return None
-              overall   = to_float(row.get("Overall") or row.get("overall"))
-              coding    = to_float(row.get("Coding") or row.get("coding"))
-              reasoning = to_float(row.get("Reasoning") or row.get("reasoning"))
-              if overall is not None:
-                  result[model] = {
-                      "overall":   overall,
-                      "coding":    coding,
-                      "reasoning": reasoning,
-                  }
-
-          with open("/tmp/livebench_raw.json", "w", encoding="utf-8") as f:
-              json.dump(result, f, indent=2)
-
-          print(f"  Converted {len(result)} models from CSV to JSON")
-          PYEOF
-          fi
-
-          echo "fetched=${FETCHED}"   >> "$GITHUB_OUTPUT"
-          echo "source=${SOURCE}"     >> "$GITHUB_OUTPUT"
-
-      # ── d · Run opencode model audit ────────────────────────────────────
-      - name: Run model audit via opencode
-        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
-        env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # ── Setup Python ─────────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          model: opencode/nemotron-3-ultra-free
-          use_github_token: "true"
-          prompt: |
-            # Task: Audit OpenCode Model Configuration Across Workflows
+          python-version: "3.11"
 
-            ## Context
-
-            You are auditing every GitHub Actions workflow in this repository that uses
-            the `anomalyco/opencode` action. Your goal is to determine whether each
-            workflow is using the **optimal model** for its task, following a
-            "free-first" policy: always prefer a free model (suffix `-free`) unless a
-            paid model is meaningfully better for the specific task.
-
-            ## Input files on disk
-
-            | File | Contents |
-            |------|----------|
-            | `/tmp/workflow_scan.json` | JSON array — one entry per opencode step found in other workflows. Fields: `file`, `workflow_name`, `job_id`, `job_name`, `step_name`, `action_ref`, `model`, `agent`, `prompt_preview`. |
-            | `/tmp/go_models.json` | Available **go (paid)** models from `https://opencode.ai/zen/go/v1/models`. |
-            | `/tmp/zen_models.json` | All zen models; field `"free"` lists the `-free` ones. |
-            | `/tmp/livebench_raw.json` | LiveBench leaderboard JSON if successfully fetched. If it contains `"note"`, data was unavailable — use your training knowledge of https://livebench.ai rankings instead. |
-
-            LiveBench fetch status: ${{ steps.livebench.outputs.fetched }}
-            LiveBench source URL: ${{ steps.livebench.outputs.source }}
-            opencode usages found: ${{ steps.scan.outputs.count }}
-            Free models available: ${{ steps.models.outputs.free_count }}
-
-            ## Step-by-step instructions
-
-            ### Step 1 — Read input files
-            Read `/tmp/workflow_scan.json`, `/tmp/zen_models.json`, and `/tmp/livebench_raw.json`.
-            If `workflow_scan.json` is an empty array, skip to Step 4 (no usages found).
-
-            ### Step 2 — Classify each workflow step
-            For each entry, infer the **task type** from `workflow_name`, `job_name`,
-            `step_name`, and `prompt_preview`. Map to one of:
-
-            | Task type | Signals to look for |
-            |-----------|-------------------|
-            | `issue-triage` | "triage", "label", "categorize", "route" |
-            | `issue-implementation` | "implement", "fix issue", "resolve issue" |
-            | `pr-review` | "review", "PR", "pull request", "diff" |
-            | `code-implementation` | "generate code", "refactor", "implement feature" |
-            | `frontend-design` | "UI", "design", "component", "layout", "mockup" |
-            | `frontend-testing` | "playwright", "cypress", "e2e", "frontend test" |
-            | `api-testing` | "api test", "integration test", "openapi", "postman" |
-            | `other` | everything else — describe clearly |
-
-            ### Step 3 — Score and recommend a model
-            Using LiveBench data (or training knowledge), assess the relevant
-            subscores for each task type:
-
-            - **Code tasks** (implementation, testing): prioritise coding subscore
-            - **Reasoning tasks** (PR review, audit): prioritise reasoning subscore
-            - **Classification tasks** (triage): prioritise instruction-following + speed
-            - **Multimodal tasks** (frontend design): require vision capability
-
-            **Free-first rule**: if a free model scores within **5%** of the best
-            paid model on the relevant subscores, always recommend the free model.
-
-            Reference baseline (override with LiveBench data when available):
-
-            | Task | Best free model | Best paid fallback |
-            |------|-----------------|--------------------|
-            | issue-triage | deepseek-v4-flash-free | deepseek-v4-flash |
-            | issue-implementation | north-mini-code-free | kimi-k2.7-code |
-            | pr-review | nemotron-3-ultra-free | deepseek-v4-pro |
-            | code-implementation | north-mini-code-free | kimi-k2.7-code |
-            | frontend-design | mimo-v2.5-free | mimo-v2-omni |
-            | frontend-testing | north-mini-code-free | kimi-k2.7-code |
-            | api-testing | deepseek-v4-flash-free | deepseek-v4-flash |
-
-            A model is:
-            - ✅ **Optimal** — the recommended model (or equivalent) is already in use
-            - ⚠️ **Suboptimal** — a better/cheaper model exists but current one still works
-            - ❌ **Wrong** — significant capability mismatch or paying for a model
-              when a free equivalent exists
-
-            ### Step 4 — Create or update the GitHub issue
-
-            Search for an open **or closed** issue titled **exactly**:
-            `[Model Audit] OpenCode model configuration recommendations`
-
-            - If it exists: **update the body** (do not create a duplicate).
-              Re-open it if it was closed and there are new findings.
-            - If it does not exist: **create** it.
-            - Apply labels `maintenance` and `ai-config`; create them if missing
-              (colors: #6b7280 and #8b5cf6 respectively).
-
-            #### Issue body template
-
-            ```markdown
-                        ## OpenCode Model Audit — YYYY-MM-DD
-
-                        > Automated audit by the `opencode-maintenance` workflow.
-                        > LiveBench data: [fetched from URL | based on model training knowledge]
-
-                        ### Summary
-                        <One concise paragraph: number of workflows checked, discrepancies found.>
-
-                        ### Workflow Analysis
-
-                        | Workflow | Job | Step | Current Model | Recommended | Task Type | Status |
-                        |----------|-----|------|---------------|-------------|-----------|--------|
-                        | ...      | ... | ...  | ...           | ...         | ...       | ✅/⚠️/❌ |
-
-                        _Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong_
-
-                        ### LiveBench Score Reference
-                        <Compact table: model name, overall, coding, reasoning scores.>
-
-                        ### Recommended Changes
-                        <For each ⚠️/❌: exact `model:` value, file path, one-sentence justification.>
-
-                        ---
-                        *Audit runs every Monday. Trigger manually via `workflow_dispatch`.*
-            ```
-
-            #### Special cases
-            - **No discrepancies** (all ✅): comment "✅ All configs optimal as of YYYY-MM-DD" and **close** the issue.
-            - **No opencode usages**: note in body; close if open.
-            - **Parse errors**: list affected files, ask human to review.
-
-            ### Final rules
-            - Be factual and cite LiveBench scores. Do not invent numbers.
-            - Keep issue body under 150 lines.
-            - Do not create any issue other than the one described above.
-
-      # ── e · Update README.md with model recommendation table ──────────
-      - name: Update README.md with model recommendations
-        env:
-          LIVEBENCH_FETCHED: ${{ steps.livebench.outputs.fetched }}
-          LIVEBENCH_SOURCE: ${{ steps.livebench.outputs.source }}
+      # ── Install dependencies ─────────────────────────────────────────────
+      - name: Install dependencies
         run: |
-          python3 << 'PYEOF'
-          import json, os
+          python -m pip install --upgrade pip
+          pip install pyyaml requests
 
-          LIVEBENCH_FETCHED = os.environ.get("LIVEBENCH_FETCHED", "false")
-          LIVEBENCH_SOURCE  = os.environ.get("LIVEBENCH_SOURCE", "")
+      # ── Run maintenance script ───────────────────────────────────────────
+      # The script:
+      #   1. Fetches OpenCode Zen (free) and Go (paid) model catalogs
+      #   2. Fetches latest LiveBench leaderboard data (CSV first, JSON fallback)
+      #   3. Classifies workflows by task type (using config/task-types.yaml)
+      #   4. Scores and recommends optimal models per task type
+      #   5. Updates README.md with recommendation tables
+      #   6. Audits workflows for model optimality (with status icons)
+      #   7. Saves all intermediate data to data/*.json
+      - name: Run OpenCode maintenance
+        id: maintenance
+        continue-on-error: true
+        run: python scripts/opencode_maintenance.py
 
-          # ── Reference baseline: task type → recommended models ──────────
-          REFERENCE = [
-              ("issue-triage",         "deepseek-v4-flash-free", "deepseek-v4-flash"),
-              ("issue-implementation", "north-mini-code-free",   "kimi-k2.7-code"),
-              ("pr-review",            "nemotron-3-ultra-free",  "deepseek-v4-pro"),
-              ("code-implementation",  "north-mini-code-free",   "kimi-k2.7-code"),
-              ("frontend-design",      "mimo-v2.5-free",         "mimo-v2-omni"),
-              ("frontend-testing",     "north-mini-code-free",   "kimi-k2.7-code"),
-              ("api-testing",          "deepseek-v4-flash-free", "deepseek-v4-flash"),
-          ]
+      # ── Commit README.md and data changes ────────────────────────────────
+      - name: Commit changes
+        run: |
+          git config user.name "opencode-maintenance[bot]"
+          git config user.email "opencode-maintenance[bot]@users.noreply.github.com"
 
-          # All unique models we care about
-          ALL_MODELS = sorted(set(
-              m for _, free_m, go_m in REFERENCE for m in (free_m, go_m)
-          ))
+          git add README.md data/ 2>/dev/null || true
 
-          # ── Parse LiveBench data if available ───────────────────────────
-          scores = {}  # model_name_lower -> {"overall": ..., "coding": ..., "reasoning": ...}
-          lb_note = ""
+          if git diff --cached --quiet; then
+            echo "ℹ No changes to commit"
+          else
+            git commit -m "📝 docs: update model recommendations and audit results"
+            git push
+            echo "✓ Changes committed and pushed"
+          fi
 
-          try:
-              with open("/tmp/livebench_raw.json") as f:
-                  lb = json.load(f)
-          except (FileNotFoundError, json.JSONDecodeError):
-              lb = {}
-
-          if isinstance(lb, dict) and "note" not in lb:
-              # Attempt format: dict of model_name -> {overall, coding, ...}
-              for model_name, data in lb.items():
-                  if isinstance(data, dict) and isinstance(model_name, str):
-                      key = model_name.lower()
-                      overall   = data.get("overall") or data.get("Overall") or data.get("average")
-                      coding    = data.get("coding") or data.get("Coding")
-                      reasoning = data.get("reasoning") or data.get("Reasoning")
-                      if overall is not None:
-                          scores[key] = {
-                              "overall":   round(float(overall), 1),
-                              "coding":    round(float(coding), 1) if coding else None,
-                              "reasoning": round(float(reasoning), 1) if reasoning else None,
-                          }
-          elif isinstance(lb, list):
-              # Attempt format: array of {model: ..., overall: ..., ...}
-              for entry in lb:
-                  if isinstance(entry, dict):
-                      name = entry.get("model") or entry.get("name") or entry.get("id") or ""
-                      key = name.lower()
-                      overall   = entry.get("overall") or entry.get("Overall") or entry.get("average")
-                      coding    = entry.get("coding") or entry.get("Coding")
-                      reasoning = entry.get("reasoning") or entry.get("Reasoning")
-                      if overall is not None:
-                          scores[key] = {
-                              "overall":   round(float(overall), 1),
-                              "coding":    round(float(coding), 1) if coding else None,
-                              "reasoning": round(float(reasoning), 1) if reasoning else None,
-                          }
-
-          if not scores:
-              lb_note = "LiveBench data unavailable or did not contain expected model keys"
-
-          # Helper: format a score cell
-          def fmt_score(model_name, subscore):
-              key = model_name.lower()
-              if key in scores and scores[key].get(subscore) is not None:
-                  return str(scores[key][subscore])
-              return "—"
-
-          # ── Generate model recommendation table ─────────────────────────
-          header  = "| Task Type | Suggested Free Model | Score (Overall) | Suggested Go Model | Score (Overall) |"
-          sep     = "|-----------|----------------------|-----------------|--------------------|-----------------|"
-          rows = []
-          for task_type, free_model, go_model in REFERENCE:
-              free_score = fmt_score(free_model, "overall")
-              go_score   = fmt_score(go_model, "overall")
-              rows.append(f"| `{task_type}` | `{free_model}` | {free_score} | `{go_model}` | {go_score} |")
-
-          table = "\n".join([header, sep] + rows)
-
-          # ── Build the full Model Recommendations section ────────────────
-          date_str = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
-
-          lines = ["""## Model Recommendations
-
-          > Automatically updated by the `opencode-maintenance` workflow.
-          > Last updated: **{date}**.
-          > LiveBench data: **{livebench_status}**.
-
-          This table shows the recommended model per task type, following a **free-first**
-          policy: the free model is preferred unless a paid (Go) model offers a
-          meaningfully higher score for the task.
-
-          {table}
-
-          ### Score Reference
-
-          | Model | Tier | Overall | Coding | Reasoning |
-          |-------|------|---------|--------|-----------|""".format(
-                date=date_str,
-                livebench_status=(
-                    f"fetched from [{LIVEBENCH_SOURCE}]({LIVEBENCH_SOURCE})"
-                    if LIVEBENCH_FETCHED == "true" and LIVEBENCH_SOURCE
-                    else "based on model training knowledge"
-                ),
-                table=table,
-            ))
-
-                    # Score detail rows for each unique model
-                    for model in ALL_MODELS:
-                        tier = "Go (paid)" if not model.endswith("-free") else "Free"
-                        ov = fmt_score(model, "overall")
-                        cd = fmt_score(model, "coding")
-                        rn = fmt_score(model, "reasoning")
-                        lines.append(f"| `{model}` | {tier} | {ov} | {cd} | {rn} |")
-
-                    lines.append("")
-                    if lb_note:
-                        lines.append(f"> {lb_note}")
-                    lines.append("")
-
-                    section = "\n".join(lines)
-
-                    # ── Update README.md ────────────────────────────────────────────
-                    readme_path = "README.md"
-
-                    if os.path.exists(readme_path):
-                        with open(readme_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-
-                        # Replace existing section or append
-                        marker_start = "## Model Recommendations"
-                        if marker_start in content:
-                            before = content.split(marker_start)[0]
-                            content = before.rstrip("\n") + "\n\n" + section
-                        else:
-                            content = content.rstrip("\n") + "\n\n" + section
-                    else:
-                        content = f"# opencode-actions\n\n{section}"
-
-                    with open(readme_path, "w", encoding="utf-8") as f:
-                        f.write(content)
-
-                    print("✓ README.md updated with model recommendation table")
-                    print(f"  LiveBench scores parsed for {len(scores)} model(s)")
-                    print(f"  Note: {lb_note}" if lb_note else "  All scores from LiveBench")
-                    PYEOF
-
-                # ── f · Commit README.md changes ─────────────────────────────────────
-                - name: Commit README.md if changed
-                  run: |
-                    git config user.name "opencode-maintenance[bot]"
-                    git config user.email "opencode-maintenance[bot]@users.noreply.github.com"
-                    git add README.md
-                    if git diff --cached --quiet; then
-                      echo "ℹ No changes to README.md"
-                    else
-                      git commit -m "📝 docs: update model recommendation table"
-                      git push
-                      echo "✓ README.md updated and committed"
-                    fi
+      # ── Summary ──────────────────────────────────────────────────────────
+      - name: Show summary
+        if: always()
+        run: |
+          echo "## OpenCode Maintenance Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/audit_results.json ]; then
+            python3 -c "
+          import json
+          with open('data/audit_results.json') as f:
+              data = json.load(f)
+          print(f'- LiveBench models scored: **{data[\"livebench_models\"]}**')
+          print(f'- Free models available: **{data[\"free_models\"]}**')
+          print(f'- Go (paid) models available: **{data[\"go_models\"]}**')
+          print(f'- Workflows audited: **{data[\"workflows_audited\"]}**')
+          print(f'- Steps checked: **{data[\"steps_audited\"]}**')
+          print(f'- Timestamp: {data[\"timestamp\"]}')
+          print()
+          results = data.get('results', [])
+          for r in results:
+              if r.get('status') == 'parse_error':
+                  print(f'- ❌ Parse error in \`{r[\"file\"]}\`: {r[\"error\"]}')
+              else:
+                  icon = r.get('status', '❓')
+                  print(f'- {icon} \`{r[\"workflow\"]}\` / \`{r[\"job\"]}\` / \`{r[\"step\"]}\` — current: \`{r[\"current_model\"]}\`, suggested free: \`{r[\"recommended_free\"]}\`')
+          " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠ No audit results found" >> $GITHUB_STEP_SUMMARY
+          fi

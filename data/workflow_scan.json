@@ -1,0 +1,44 @@
+[
+  {
+    "file": ".github/workflows/opencode-implement.yaml",
+    "workflow_name": "opencode-implement",
+    "job_id": "implement",
+    "job_name": "implement",
+    "step_index": 1,
+    "step_name": "Run opencode (implementation only)",
+    "action_ref": "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a",
+    "model": "opencode/deepseek-v4-flash-free",
+    "agent": "",
+    "prompt_preview": "You are a senior software engineer. Your ONLY job in this run is to\nimplement an already-approved proposal \u2014 you do not re-triage, you do\nnot re-open the design discussion, and you do not search for related\nissues. That work was already done in a separate workflow.\n\n## Context\n- Repository: ${{ github.repository }}\n- Issue/PR number: ${{ github.event.issue.number || github.event.pull_request.number }}\n- This run was triggered because the label\n  `opencode:approved-for-implementation` was just ad",
+    "task_type": "issue-implementation",
+    "mapped": true
+  },
+  {
+    "file": ".github/workflows/opencode-review.yaml",
+    "workflow_name": "opencode-review",
+    "job_id": "review",
+    "job_name": "review",
+    "step_index": 1,
+    "step_name": "step-1",
+    "action_ref": "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a",
+    "model": "opencode/deepseek-v4-flash-free",
+    "agent": "",
+    "prompt_preview": "Act as an expert Senior Software Engineer and Code Reviewer. Review this pull request thoroughly based strictly on the provided diff and its immediate context.\n\n## Mandatory output mechanism\n\nYou MUST submit your review using the `gh` CLI. Do NOT call `gh pr comment` \u2014 the review body already appears as a comment on the PR.\n\n### Step 1 \u2014 Resolve outdated review threads\n\nBefore submitting the new review, check for existing review threads that have been addressed by the current diff and resolve th",
+    "task_type": "pr-review",
+    "mapped": true
+  },
+  {
+    "file": ".github/workflows/opencode-triage.yaml",
+    "workflow_name": "opencode-triage",
+    "job_id": "triage",
+    "job_name": "triage",
+    "step_index": 1,
+    "step_name": "Run opencode (analysis & proposal only)",
+    "action_ref": "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a",
+    "model": "opencode/deepseek-v4-flash-free",
+    "agent": "",
+    "prompt_preview": "You are a senior maintainer of this repository, acting as a triage and\ntechnical-design assistant. You have access to repository tools (file\nsearch, grep, git history) and to `gh` CLI commands for reading and\ncommenting on issues/PRs. In this run you have READ-ONLY access to the\nrepository contents \u2014 you cannot commit, push, or modify any file, by\ndesign. Do not attempt to write files or run git commands that mutate\nthe working tree; they will fail.\n\n## Context\n- Repository: ${{ github.repositor",
+    "task_type": "issue-triage",
+    "mapped": true
+  }
+]
