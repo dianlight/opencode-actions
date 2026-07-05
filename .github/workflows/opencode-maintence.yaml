@@ -87,62 +87,74 @@ jobs:
             exit 0
           fi
 
-          BODY="# OpenCode Maintenance Report\n\n"
-          BODY+="> Automatically detected by the \`opencode-maintenance\` workflow.\n"
-          BODY+="> Run date: $(date -u +%Y-%m-%d)\n\n"
-
-          if [ "$STALE" != "0" ] || [ "$MISSING" != "0" ]; then
-            BODY+="## \ud83d\udccb Model Coverage Issues\n\n"
-          fi
-
-          if [ "$STALE" != "0" ]; then
-            BODY+="### Stale Fallback Entries\n\n"
-            BODY+="The following models are in \`config/model-scores.yaml\` but are **already available on LiveBench**.\n"
-            BODY+="Consider removing them from the static config.\n\n"
-            BODY+="| Model | LiveBench Score |\n"
-            BODY+="|-------|-----------------|\n"
-            python3 << 'PYEOF' >> /tmp/coverage_body.md
+          # Generate issue body with Python (handles newlines correctly)
+          python3 << 'PYEOF' > /tmp/issue_body.md
           import json
+          from datetime import datetime, timezone
+
           with open("data/coverage_issues.json") as f:
-              d = json.load(f)
-          for m in d.get("stale_fallback", []):
-              lb = m.get("livebench_scores", {})
-              ov = lb.get("overall", "?")
-              print(f"| {m['model']} | overall={ov} |")
-          PYEOF
-            BODY+=$(cat /tmp/coverage_body.md)
-            BODY+="\n\n"
-          fi
-
-          if [ "$MISSING" != "0" ]; then
-            BODY+="### Models Missing Score Data\n\n"
-            BODY+="The following OpenCode models have **no score data** from LiveBench or the static fallback.\n"
-            BODY+="Consider adding them to \`config/model-scores.yaml\`.\n\n"
-            BODY+="| Model | Tier |\n"
-            BODY+="|-------|------|\n"
-            python3 << 'PYEOF' >> /tmp/coverage_body.md
-          import json
-          with open("data/coverage_issues.json") as f:
-              d = json.load(f)
-          for m in d.get("missing_scores", []):
-              print(f"| {m['model']} | {m['tier']} |")
-          PYEOF
-            BODY+=$(cat /tmp/coverage_body.md)
-            BODY+="\n\n"
-          fi
-
-          if [ "$SUBOPTIMAL" != "0" ]; then
-            BODY+="## \u26a0\ufe0f Suboptimal Workflow Configurations\n\n"
-            BODY+="The following workflows use a model that is not optimal.\n\n"
-            BODY+="| Workflow | Job | Step | Current Model | Recommended Free | Recommended Go | Status |\n"
-            BODY+="|----------|-----|------|---------------|------------------|----------------|--------|\n"
-            python3 << 'PYEOF' >> /tmp/workflow_body.md
-          import json
+              coverage = json.load(f)
           with open("data/audit_results.json") as f:
-              d = json.load(f)
-          for r in d.get("results", []):
-              status = r.get("status", "")
-              if status in ("\u26a0\ufe0f", "\u274c"):
+              audit = json.load(f)
+
+          stale = coverage.get("stale_fallback", [])
+          missing = coverage.get("missing_scores", [])
+          results = audit.get("results", [])
+          suboptimal = [r for r in results if r.get("status") in ("\u26a0\ufe0f", "\u274c")]
+
+          lines = [
+              "# OpenCode Maintenance Report",
+              "",
+              "> Automatically detected by the `opencode-maintenance` workflow.",
+              f"> Run date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+              "",
+          ]
+
+          if stale or missing:
+              lines.append("## \U0001f4cb Model Coverage Issues")
+              lines.append("")
+
+          if stale:
+              lines.append("### Stale Fallback Entries")
+              lines.append("")
+              lines.append(
+                  "The following models are in `config/model-scores.yaml` but are "
+                  "**already available on LiveBench**. "
+                  "Consider removing them from the static config."
+              )
+              lines.append("")
+              lines.append("| Model | LiveBench Score |")
+              lines.append("|-------|-----------------|")
+              for m in stale:
+                  lb = m.get("livebench_scores", {})
+                  ov = lb.get("overall", "?")
+                  lines.append(f"| {m['model']} | overall={ov} |")
+              lines.append("")
+
+          if missing:
+              lines.append("### Models Missing Score Data")
+              lines.append("")
+              lines.append(
+                  "The following OpenCode models have **no score data** "
+                  "from LiveBench or the static fallback. "
+                  "Consider adding them to `config/model-scores.yaml`."
+              )
+              lines.append("")
+              lines.append("| Model | Tier |")
+              lines.append("|-------|------|")
+              for m in missing:
+                  lines.append(f"| {m['model']} | {m['tier']} |")
+              lines.append("")
+
+          if suboptimal:
+              lines.append("## \u26a0\ufe0f Suboptimal Workflow Configurations")
+              lines.append("")
+              lines.append("The following workflows use a model that is not optimal.")
+              lines.append("")
+              lines.append("| Workflow | Job | Step | Current Model | Recommended Free | Recommended Go | Status |")
+              lines.append("|----------|-----|------|---------------|------------------|----------------|--------|")
+              for r in suboptimal:
+                  status = r.get("status", "")
                   rec_free = r.get("recommended_free") or "\u2014"
                   rec_go   = r.get("recommended_go")   or "\u2014"
                   pref     = r.get("preferred_tier")
@@ -150,32 +162,35 @@ jobs:
                   diff_str = f" (+{diff}%)" if diff and diff > 0 else ""
                   if pref == "free":
                       free_cell = f"\U0001f3c6 {rec_free}"
-                      go_cell   = f"{rec_go}"
+                      go_cell   = rec_go
                   elif pref == "go":
-                      free_cell = f"{rec_free}"
+                      free_cell = rec_free
                       go_cell   = f"\U0001f3c6 {rec_go}{diff_str}"
                   else:
-                      free_cell = f"{rec_free}"
-                      go_cell   = f"{rec_go}"
-                  print(f"| {r['workflow']} | {r['job']} | {r['step']} | {r['current_model']} | {free_cell} | {go_cell} | {status} |")
-          PYEOF
-            BODY+=$(cat /tmp/workflow_body.md)
-            BODY+="\n\n"
-          fi
+                      free_cell = rec_free
+                      go_cell   = rec_go
+                  lines.append(
+                      f"| {r['workflow']} | {r['job']} | {r['step']} "
+                      f"| {r['current_model']} | {free_cell} | {go_cell} | {status} |"
+                  )
+              lines.append("")
 
-          BODY+="---\n*Generated by \`opencode-maintenance\` workflow.*"
+          lines.append("---")
+          lines.append("*Generated by `opencode-maintenance` workflow.*")
+
+          print("\n".join(lines))
+          PYEOF
 
           # Check if an open issue with label already exists
           EXISTING=$(gh issue list --label "maintenance" --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "Issues detected on $(date -u +%Y-%m-%d):"
-            gh issue comment "$EXISTING" --body "$BODY"
-            echo "\u2713 Commented on existing issue #$EXISTING"
+            gh issue comment "$EXISTING" --body-file /tmp/issue_body.md
+            echo "\u2713 Updated existing issue #$EXISTING"
           else
             gh issue create \
               --title "[Model Audit] OpenCode maintenance issues detected" \
               --label "maintenance" \
-              --body "$BODY"
+              --body-file /tmp/issue_body.md
             echo "\u2713 Created new issue"
           fi
         env:

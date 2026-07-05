@@ -4,7 +4,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-05 07:32 UTC**.
+> Last updated: **2026-07-05 08:18 UTC**.
 > LiveBench data: **127 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -52,7 +52,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-05 07:32 UTC**
+> Audited: **2026-07-05 08:18 UTC**
 > Workflows checked: **3**
 > OpenCode steps found: **3**
 
