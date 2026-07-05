@@ -4,7 +4,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-05 08:24 UTC**.
+> Last updated: **2026-07-05 08:30 UTC**.
 > LiveBench data: **127 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -52,13 +52,13 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-05 08:24 UTC**
+> Audited: **2026-07-05 08:30 UTC**
 > Workflows checked: **3**
 > OpenCode steps found: **3**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|------------------|----------------|--------|
-| `opencode-implement` | `implement` | `Run opencode (implementation only)` | `issue-implementation` | `opencode/deepseek-v4-flash-free` | `north-mini-code-free` | 🏆 `glm-5.2` (+12%) | ⚠️ |
+| `opencode-implement` | `implement` | `Run opencode (implementation only)` | `issue-implementation` | `opencode/north-mini-code-free` | `north-mini-code-free` | 🏆 `glm-5.2` (+12%) | ✅ |
 | `opencode-review` | `review` | `step-1` | `pr-review` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
 | `opencode-triage` | `triage` | `Run opencode (analysis & proposal only)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
 
