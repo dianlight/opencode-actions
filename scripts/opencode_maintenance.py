@@ -39,6 +39,7 @@ GO_MODELS_PATH = DATA_DIR / "go_models.json"
 LIVEBENCH_PATH = DATA_DIR / "livebench.json"
 WORKFLOW_SCAN_PATH = DATA_DIR / "workflow_scan.json"
 AUDIT_RESULTS_PATH = DATA_DIR / "audit_results.json"
+COVERAGE_ISSUES_PATH = DATA_DIR / "coverage_issues.json"
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 ZEN_URL = "https://opencode.ai/zen/v1/models"
@@ -483,36 +484,45 @@ def _normalise_model_for_lookup(model_name: str) -> str:
 
 def get_model_score(model_name: str, livebench: dict, subscore: str) -> Optional[float]:
     """Get a model's subscore from LiveBench data or static fallback (case-insensitive, suffix-stripped)."""
+    s = _get_model_score_and_source(model_name, livebench, subscore)
+    return s[0] if s else None
+
+
+def _get_model_score_and_source(model_name: str, livebench: dict, subscore: str) -> Optional[tuple]:
+    """Like get_model_score but returns (score, source) where source is 'livebench' or 'fallback'."""
     models = _lb_models(livebench)
     target = _normalise_model_for_lookup(model_name)
 
-    # 1. Try LiveBench data (exact match)
+    # 1. Try LiveBench data
     for k, v in models.items():
         if _normalise_model_for_lookup(k) == target:
-            return v.get(subscore)
-    # 1b. Try LiveBench data (partial match)
+            return (v.get(subscore), "livebench")
     for k, v in models.items():
         k_norm = _normalise_model_for_lookup(k)
         if target and (target in k_norm or k_norm in target):
-            return v.get(subscore)
+            return (v.get(subscore), "livebench")
 
     # 2. Try static fallback config
     fallback = _get_fallback_scores()
-    # 2a. Exact match on original name (preserves -free suffix)
     name_lc = model_name.strip().lower()
     if name_lc in fallback:
-        return fallback[name_lc].get(subscore)
-    # 2b. Normalized match (strips -free for LiveBench compat)
+        return (fallback[name_lc].get(subscore), "fallback")
     for name, scores in fallback.items():
         if _normalise_model_for_lookup(name) == target:
-            return scores.get(subscore)
-    # 2c. Partial match
+            return (scores.get(subscore), "fallback")
     for name, scores in fallback.items():
         k_norm = _normalise_model_for_lookup(name)
         if target and (target in k_norm or k_norm in target):
-            return scores.get(subscore)
-
+            return (scores.get(subscore), "fallback")
     return None
+
+
+def get_model_source(model_name: str, livebench: dict) -> str:
+    """Determine the data source for a model: 'livebench', 'fallback', or 'missing'."""
+    s = _get_model_score_and_source(model_name, livebench, "overall")
+    if s:
+        return s[1]
+    return "missing"
 
 
 def get_best_models_for_task(
@@ -631,6 +641,47 @@ def classify_model_status(
 
 
 # ─── README Generation ───────────────────────────────────────────────────────
+
+# ─── Coverage Checks ──────────────────────────────────────────────────────────
+def detect_coverage_issues(free_models: list, go_models: list,
+                           livebench: dict) -> dict:
+    """Detect stale fallback entries and models missing scores entirely.
+
+    Returns: {
+        "stale_fallback": [{"model": str, "livebench_scores": {...}}],
+        "missing_scores": [{"model": str, "tier": str}],
+    }
+    """
+    issues = {"stale_fallback": [], "missing_scores": []}
+    lb_models = _lb_models(livebench)
+    fallback = _get_fallback_scores()
+
+    # Normalise LiveBench model names for quick lookup
+    lb_set = set()
+    for k in lb_models:
+        lb_set.add(_normalise_model_for_lookup(k))
+
+    # Check fallback entries that are now in LiveBench
+    for name in fallback:
+        norm = _normalise_model_for_lookup(name)
+        if norm in lb_set:
+            lb_scores = {k: v for k, v in lb_models.items()
+                         if _normalise_model_for_lookup(k) == norm}
+            issues["stale_fallback"].append({
+                "model": name,
+                "livebench_scores": lb_scores.get(norm, next(iter(lb_scores.values()), {})),
+            })
+
+    # Check all OpenCode models for missing scores
+    all_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
+    for model_id in sorted(all_ids):
+        source = get_model_source(model_id, livebench)
+        if source == "missing":
+            tier = "Free" if model_id.endswith("-free") else "Go (Paid)"
+            issues["missing_scores"].append({"model": model_id, "tier": tier})
+
+    return issues
+
 def generate_model_recommendation_table(
     task_types: list,
     free_models: list,
@@ -698,7 +749,7 @@ def generate_model_recommendation_table(
 def generate_score_reference_table(
     livebench: dict, free_models: list, go_models: list
 ) -> str:
-    """Generate the detailed score reference table."""
+    """Generate the detailed score reference table with source indicators."""
     models = _lb_models(livebench)
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
 
@@ -706,20 +757,26 @@ def generate_score_reference_table(
         "",
         "### LiveBench Score Reference",
         "",
-        "| Model | Tier | Overall | Coding | Reasoning | Vision | Instruction Following |",
-        "|-------|------|---------|--------|-----------|--------|----------------------|",
+        "| Model | Tier | Source | Overall | Coding | Reasoning | Vision | Instruction Following |",
+        "|-------|------|--------|---------|--------|-----------|--------|----------------------|",
     ]
 
     for model_id in sorted(all_model_ids):
         tier = "Free" if model_id.endswith("-free") else "Go (Paid)"
-        # Look up score via the same helper that strips `-free`
+        source = get_model_source(model_id, livebench)
+        if source == "livebench":
+            src_icon = "✅ LiveBench"
+        elif source == "fallback":
+            src_icon = "📋 Fallback"
+        else:
+            src_icon = "❌ Missing"
         ov = get_model_score(model_id, livebench, "overall")
         cd = get_model_score(model_id, livebench, "coding")
         re_s = get_model_score(model_id, livebench, "reasoning")
         vs = get_model_score(model_id, livebench, "vision")
         if_ = get_model_score(model_id, livebench, "instruction_following")
         lines.append(
-            f"| `{model_id}` | {tier} | "
+            f"| `{model_id}` | {tier} | {src_icon} | "
             f"{ov if ov is not None else '—'} | {cd if cd is not None else '—'} | "
             f"{re_s if re_s is not None else '—'} | {vs if vs is not None else '—'} | "
             f"{if_ if if_ is not None else '—'} |"
@@ -930,6 +987,22 @@ def main():
         },
     )
 
+    # 7. Detect coverage issues (stale fallback, missing scores)
+    print("→ Checking model coverage...")
+    coverage = detect_coverage_issues(free_models, go_models, livebench)
+    save_json(COVERAGE_ISSUES_PATH, coverage)
+    if coverage.get("stale_fallback"):
+        for m in coverage["stale_fallback"]:
+            print(f"  ⚠ Stale fallback: {m['model']} is now in LiveBench")
+    if coverage.get("missing_scores"):
+        for m in coverage["missing_scores"]:
+            print(f"  ❌ Missing scores: {m['model']} ({m['tier']})")
+    if not coverage.get("stale_fallback") and not coverage.get("missing_scores"):
+        print("  ✓ All models have scores, no stale fallback entries")
+
+    stale = len(coverage.get("stale_fallback", []))
+    missing = len(coverage.get("missing_scores", []))
+
     print("=" * 60)
     print("✅ Maintenance complete")
     print(f"  Workflows audited: {len(set(r['file'] for r in scan_results))}")
@@ -941,9 +1014,10 @@ def main():
     print(f"  Audit data: {AUDIT_RESULTS_PATH}")
     print("=" * 60)
 
-    # Exit with error code if any ❌ found (for CI)
+    # Exit with error code if any ❌ found (for CI) or coverage issues
     has_errors = any(r.get("status") == "❌" for r in audit_results)
-    sys.exit(1 if has_errors else 0)
+    has_coverage = bool(coverage.get("stale_fallback") or coverage.get("missing_scores"))
+    sys.exit(1 if (has_errors or has_coverage) else 0)
 
 
 if __name__ == "__main__":
