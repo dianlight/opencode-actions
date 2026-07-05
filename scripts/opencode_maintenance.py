@@ -89,6 +89,40 @@ LIVEBENCH_COLUMN_CATEGORIES = {
     ],
 }
 
+# Static fallback scores cache (loaded from config/model-scores.yaml)
+_FALLBACK_CACHE = None
+
+
+def _get_fallback_scores() -> dict:
+    """Load static fallback scores for models not on LiveBench.
+    Returns a normalized lookup: strips the '-free' suffix so
+    that both "mimo-v2.5-free" and "mimo-v2.5" resolve correctly.
+    If both foo-free and foo exist, foo-free values take priority."""
+    global _FALLBACK_CACHE
+    if _FALLBACK_CACHE is not None:
+        return _FALLBACK_CACHE
+    path = CONFIG_DIR / "model-scores.yaml"
+    if path.exists():
+        data = load_yaml(path)
+        raw = data.get("model_scores") or {}
+    else:
+        raw = {}
+    _FALLBACK_CACHE = {}
+    SFX = "-free"
+    for name, scores in raw.items():
+        norm = name.strip().lower()
+        if norm.endswith(SFX):
+            wf = norm[: -len(SFX)]
+            _FALLBACK_CACHE[norm] = scores
+            if wf not in _FALLBACK_CACHE:
+                _FALLBACK_CACHE[wf] = scores
+        else:
+            _FALLBACK_CACHE[norm] = scores
+            nsfx = norm + SFX
+            if nsfx not in _FALLBACK_CACHE:
+                _FALLBACK_CACHE[nsfx] = scores
+    return _FALLBACK_CACHE
+
 
 # ─── Utils ────────────────────────────────────────────────────────────────────
 def fetch_json(url: str, timeout: int = 15) -> Optional[dict]:
@@ -448,19 +482,36 @@ def _normalise_model_for_lookup(model_name: str) -> str:
 
 
 def get_model_score(model_name: str, livebench: dict, subscore: str) -> Optional[float]:
-    """Get a model's subscore from LiveBench data (case-insensitive, suffix-stripped)."""
+    """Get a model's subscore from LiveBench data or static fallback (case-insensitive, suffix-stripped)."""
     models = _lb_models(livebench)
     target = _normalise_model_for_lookup(model_name)
 
-    # Try exact match (after normalisation)
+    # 1. Try LiveBench data (exact match)
     for k, v in models.items():
         if _normalise_model_for_lookup(k) == target:
             return v.get(subscore)
-    # Try partial match (target contains key, or key contains target)
+    # 1b. Try LiveBench data (partial match)
     for k, v in models.items():
         k_norm = _normalise_model_for_lookup(k)
         if target and (target in k_norm or k_norm in target):
             return v.get(subscore)
+
+    # 2. Try static fallback config
+    fallback = _get_fallback_scores()
+    # 2a. Exact match on original name (preserves -free suffix)
+    name_lc = model_name.strip().lower()
+    if name_lc in fallback:
+        return fallback[name_lc].get(subscore)
+    # 2b. Normalized match (strips -free for LiveBench compat)
+    for name, scores in fallback.items():
+        if _normalise_model_for_lookup(name) == target:
+            return scores.get(subscore)
+    # 2c. Partial match
+    for name, scores in fallback.items():
+        k_norm = _normalise_model_for_lookup(name)
+        if target and (target in k_norm or k_norm in target):
+            return scores.get(subscore)
+
     return None
 
 
