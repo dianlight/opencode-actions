@@ -488,7 +488,9 @@ def get_model_score(model_name: str, livebench: dict, subscore: str) -> Optional
     return s[0] if s else None
 
 
-def _get_model_score_and_source(model_name: str, livebench: dict, subscore: str) -> Optional[tuple]:
+def _get_model_score_and_source(
+    model_name: str, livebench: dict, subscore: str
+) -> Optional[tuple]:
     """Like get_model_score but returns (score, source) where source is 'livebench' or 'fallback'."""
     models = _lb_models(livebench)
     target = _normalise_model_for_lookup(model_name)
@@ -642,9 +644,9 @@ def classify_model_status(
 
 # ─── README Generation ───────────────────────────────────────────────────────
 
+
 # ─── Coverage Checks ──────────────────────────────────────────────────────────
-def detect_coverage_issues(free_models: list, go_models: list,
-                           livebench: dict) -> dict:
+def detect_coverage_issues(free_models: list, go_models: list, livebench: dict) -> dict:
     """Detect stale fallback entries and models missing scores entirely.
 
     Returns: {
@@ -665,12 +667,19 @@ def detect_coverage_issues(free_models: list, go_models: list,
     for name in fallback:
         norm = _normalise_model_for_lookup(name)
         if norm in lb_set:
-            lb_scores = {k: v for k, v in lb_models.items()
-                         if _normalise_model_for_lookup(k) == norm}
-            issues["stale_fallback"].append({
-                "model": name,
-                "livebench_scores": lb_scores.get(norm, next(iter(lb_scores.values()), {})),
-            })
+            lb_scores = {
+                k: v
+                for k, v in lb_models.items()
+                if _normalise_model_for_lookup(k) == norm
+            }
+            issues["stale_fallback"].append(
+                {
+                    "model": name,
+                    "livebench_scores": lb_scores.get(
+                        norm, next(iter(lb_scores.values()), {})
+                    ),
+                }
+            )
 
     # Check all OpenCode models for missing scores
     all_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
@@ -681,6 +690,7 @@ def detect_coverage_issues(free_models: list, go_models: list,
             issues["missing_scores"].append({"model": model_id, "tier": tier})
 
     return issues
+
 
 def generate_model_recommendation_table(
     task_types: list,
@@ -834,18 +844,60 @@ def generate_workflow_audit_table(
 
         status = classify_model_status(current, best_free, best_go)
 
+        # Compute percentage diff and trophy display
+        priority = next(
+            (t["priority"] for t in task_types if t["name"] == task_type), "overall"
+        )
+        free_score = (
+            get_model_score(best_free, livebench, priority) if best_free else None
+        )
+        go_score = get_model_score(best_go, livebench, priority) if best_go else None
+
+        diff_str = ""
+        if (
+            best_free
+            and best_go
+            and best_free != best_go
+            and free_score is not None
+            and go_score is not None
+            and free_score > 0
+        ):
+            pct = ((go_score - free_score) / free_score) * 100
+            if abs(pct) >= 1:
+                diff_str = f" (+{pct:.0f}%)" if pct > 0 else f" ({pct:.0f}%)"
+
+        # Add trophy icon to the recommended model that is preferred
+        if best_free and best_go and best_free == best_go:
+            # Free-first rule: free is preferred (both are same model)
+            free_display = f"\U0001f3c6 `{best_free}`"
+            go_display = "\u2014"
+        elif best_go and best_free:
+            # Go is significantly better (>5% diff)
+            free_display = f"`{best_free}`"
+            go_display = f"\U0001f3c6 `{best_go}`{diff_str}"
+        elif best_go:
+            free_display = "\u2014"
+            go_display = f"\U0001f3c6 `{best_go}`{diff_str}"
+        elif best_free:
+            free_display = f"\U0001f3c6 `{best_free}`"
+            go_display = "\u2014"
+        else:
+            free_display = "\u2014"
+            go_display = "\u2014"
+
         workflow = r.get("workflow_name", r["file"])
         job = r.get("job_name", r["job_id"])
         step = r.get("step_name", f"step-{r['step_index']}")
 
         lines.append(
             f"| `{workflow}` | `{job}` | `{step}` | `{task_type}` | "
-            f"`{current}` | `{best_free or '—'}` | `{best_go or '—'}` | {status} |"
+            f"`{current}` | {free_display} | {go_display} | {status} |"
         )
 
     lines.append("")
     lines.append(
-        "_Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists)_"
+        "_Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). "
+        "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free)._"
     )
 
     return "\n".join(lines)
@@ -954,6 +1006,37 @@ def main():
 
         status = classify_model_status(current, best_free, best_go)
 
+        # Determine preferred tier and compute % diff
+        if best_free and best_go and best_free == best_go:
+            preferred_tier = "free"
+        elif best_go:
+            preferred_tier = "go"
+        elif best_free:
+            preferred_tier = "free"
+        else:
+            preferred_tier = None
+
+        priority = next(
+            (t["priority"] for t in task_types if t["name"] == task_type), "overall"
+        )
+        free_score = (
+            get_model_score(best_free, livebench, priority) if best_free else None
+        )
+        go_score = get_model_score(best_go, livebench, priority) if best_go else None
+
+        preferred_diff = None
+        if (
+            best_free
+            and best_go
+            and best_free != best_go
+            and free_score is not None
+            and go_score is not None
+            and free_score > 0
+        ):
+            pct = ((go_score - free_score) / free_score) * 100
+            if abs(pct) >= 1:
+                preferred_diff = round(pct)
+
         audit_results.append(
             {
                 "file": r["file"],
@@ -964,6 +1047,8 @@ def main():
                 "current_model": current,
                 "recommended_free": best_free,
                 "recommended_go": best_go,
+                "preferred_tier": preferred_tier,
+                "preferred_diff": preferred_diff,
                 "status": status,
             }
         )
@@ -1016,7 +1101,9 @@ def main():
 
     # Exit with error code if any ❌ found (for CI) or coverage issues
     has_errors = any(r.get("status") == "❌" for r in audit_results)
-    has_coverage = bool(coverage.get("stale_fallback") or coverage.get("missing_scores"))
+    has_coverage = bool(
+        coverage.get("stale_fallback") or coverage.get("missing_scores")
+    )
     sys.exit(1 if (has_errors or has_coverage) else 0)
 
 
