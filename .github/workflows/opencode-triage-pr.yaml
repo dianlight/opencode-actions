@@ -21,12 +21,15 @@ jobs:
         contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
         github.event.pull_request.state == 'open' &&
         (
-          contains(github.event.comment.body, ' /oc') ||
-          startsWith(github.event.comment.body, '/oc') ||
-          contains(github.event.comment.body, ' /opencode') ||
-          startsWith(github.event.comment.body, '/opencode') ||
-          contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response')
-        )
+          (
+            contains(github.event.comment.body, ' /oc') ||
+            startsWith(github.event.comment.body, '/oc') ||
+            contains(github.event.comment.body, ' /opencode') ||
+            startsWith(github.event.comment.body, '/opencode')
+          ) &&
+          github.event.comment.body.length > 10
+        ) ||
+        contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response')
       ) ||
       (
         github.event_name == 'pull_request_review' &&
@@ -36,12 +39,15 @@ jobs:
         contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association) &&
         github.event.pull_request.state == 'open' &&
         (
-          contains(github.event.review.body, ' /oc') ||
-          startsWith(github.event.review.body, '/oc') ||
-          contains(github.event.review.body, ' /opencode') ||
-          startsWith(github.event.review.body, '/opencode') ||
-          contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response')
-        )
+          (
+            contains(github.event.review.body, ' /oc') ||
+            startsWith(github.event.review.body, '/oc') ||
+            contains(github.event.review.body, ' /opencode') ||
+            startsWith(github.event.review.body, '/opencode')
+          ) &&
+          github.event.review.body.length > 10
+        ) ||
+        contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response')
       )
     runs-on: ubuntu-latest
     permissions:
@@ -55,7 +61,52 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Quick approval check (no AI)
+        if: contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response')
+        id: quick-approval
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          approved="false"
+
+          # An "Approve" review verdict is always approval
+          if [ "${{ github.event_name }}" = "pull_request_review" ] && [ "${{ github.event.review.state }}" = "approved" ]; then
+            approved="true"
+          fi
+
+          # Check the body text for approval keywords
+          body="${{ github.event.review.body || github.event.comment.body }}"
+          if echo "$body" | grep -qiE '^(approved|lgtm|go ahead|:\+1:)' ; then
+            approved="true"
+          fi
+
+          if [ "$approved" = "true" ]; then
+            echo "approved=true" >> "$GITHUB_OUTPUT"
+
+            # Post acknowledgment as a PR review comment
+            gh api --method POST \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" \
+              --input - <<'EOF'
+            {
+              "event": "COMMENT",
+              "body": "✅ Approved! The implementation workflow will take it from here."
+            }
+            EOF
+
+            # Update labels
+            gh pr edit "${{ github.event.pull_request.number }}" \
+              --remove-label "opencode:awaiting-response" \
+              --add-label "opencode:approved-for-implementation"
+
+            # Dispatch implement directly
+            gh workflow run opencode-implement.yaml \
+              --ref "${{ github.ref_name }}" \
+              -f pull-request-number=${{ github.event.pull_request.number }}
+          fi
+
       - name: Run opencode (analysis & proposal only)
+        if: steps.quick-approval.outputs.approved != 'true'
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}

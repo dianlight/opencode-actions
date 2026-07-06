@@ -10,7 +10,11 @@ concurrency:
 
 jobs:
   review:
-    if: contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+    if: >-
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association) &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.changed_files < 50 &&
+      github.event.pull_request.additions < 3000
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -20,7 +24,34 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check for trivial-only changes
+        id: trivial-check
+        shell: bash
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          # Get list of changed files against the base
+          changed_files=$(git diff --name-only "$base"...HEAD 2>/dev/null || echo "")
+          if [ -z "$changed_files" ]; then
+            # Fallback: just check if any file changed at all
+            changed_files=$(git diff --name-only HEAD~1...HEAD 2>/dev/null || echo "")
+          fi
+          echo "Changed files:"
+          echo "$changed_files"
+
+          # Check if any changed file is non-trivial (code, scripts, tests, etc.)
+          # Trivial-only extensions: .md .txt .json .yaml .yml .lock .svg .png .jpg .jpeg .gif .ico .editorconfig .gitignore .gitattributes .prettierrc .DS_Store
+          if echo "$changed_files" | grep -qiE '\.(js|ts|jsx|tsx|py|rs|go|java|c|cpp|cxx|h|hpp|hxx|cs|swift|kt|rb|php|vue|svelte|scss|css|less|html|sh|bash|zsh|fish|sql|wasm|wgsl)$'; then
+            echo "Code changes detected — review needed"
+            echo "trivial-only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only trivial/non-code files changed — skipping review"
+            echo "trivial-only=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
+        if: steps.trivial-check.outputs.trivial-only != 'true'
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

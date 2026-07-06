@@ -5,6 +5,16 @@ on:
     types: [labeled]
   pull_request:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: "Issue number (from quick approval)"
+        required: false
+        type: string
+      pull-request-number:
+        description: "Pull request number (from quick approval)"
+        required: false
+        type: string
 
 concurrency:
   group: opencode-implement-${{ github.event.issue.number || github.event.pull_request.number }}
@@ -13,11 +23,14 @@ concurrency:
 jobs:
   implement:
     if: >-
-      github.event.label.name == 'opencode:approved-for-implementation' &&
-      (github.event.sender.login == 'opencode-agent[bot]' || github.event.sender.login == 'github-actions[bot]' || github.event.sender.login == 'dianlight') &&
-      !contains(github.event.issue.labels.*.name, 'opencode:awaiting-response') &&
-      !contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response') &&
-      (github.event.issue.state == 'open' || github.event.pull_request.state == 'open')
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.label.name == 'opencode:approved-for-implementation' &&
+        (github.event.sender.login == 'opencode-agent[bot]' || github.event.sender.login == 'github-actions[bot]' || github.event.sender.login == 'dianlight') &&
+        !contains(github.event.issue.labels.*.name, 'opencode:awaiting-response') &&
+        !contains(github.event.pull_request.labels.*.name, 'opencode:awaiting-response') &&
+        (github.event.issue.state == 'open' || github.event.pull_request.state == 'open')
+      )
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -46,10 +59,11 @@ jobs:
 
             ## Context
             - Repository: ${{ github.repository }}
-            - Issue number: ${{ github.event.issue.number }}
-            - Pull request number: ${{ github.event.pull_request.number }}
+            - Issue number: ${{ github.event.inputs.issue-number || github.event.issue.number }}
+            - Pull request number: ${{ github.event.inputs.pull-request-number || github.event.pull_request.number }}
             - This run was triggered by the label
-              `opencode:approved-for-implementation` being added.
+              `opencode:approved-for-implementation` being added, or dispatched
+              directly from the triage workflow after a quick approval.
             - If the issue number above is present, a human approved a proposal
               on an issue — you must create a new PR with the implementation and
               link it back to the issue.
