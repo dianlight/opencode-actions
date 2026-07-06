@@ -1,11 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "customManagers:githubActionsVersions"
   ],
   "automerge": true,
   "automergeType": "pr",
   "automergeStrategy": "squash",
+  "dependencyDashboard": true,
+  "configMigration": true,
   "packageRules": [
     {
       "description": "Auto-update GitHub Actions",
