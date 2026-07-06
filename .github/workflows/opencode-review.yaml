@@ -41,7 +41,7 @@ jobs:
           echo "$changed_files"
 
           # Check if any changed file is non-trivial (code, scripts, tests, etc.)
-          # Trivial-only extensions: .md .txt .json .yaml .yml .lock .svg .png .jpg .jpeg .gif .ico .editorconfig .gitignore .gitattributes .prettierrc .DS_Store
+          # Trivial-only extensions: .md .txt .json .lock .svg .png .jpg .jpeg .gif .ico .editorconfig .gitignore .gitattributes .prettierrc .DS_Store
           if echo "$changed_files" | grep -qiE '\.(js|ts|jsx|tsx|py|rs|go|java|c|cpp|cxx|h|hpp|hxx|cs|swift|kt|rb|php|vue|svelte|scss|css|less|html|sh|bash|zsh|fish|sql|wasm|wgsl|yml|yaml)$'; then
             echo "Code changes detected — review needed"
             echo "trivial-only=false" >> "$GITHUB_OUTPUT"

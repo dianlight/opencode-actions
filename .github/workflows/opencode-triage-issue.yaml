@@ -44,7 +44,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          body="${{ github.event.comment.body }}"
+          body=$(echo '${{ toJSON(github.event.comment.body) }}' | python3 -c "import sys,json; print(json.load(sys.stdin))" 2>/dev/null) || body=''
           if echo "$body" | grep -qiE '^(approved|lgtm|go ahead|:\+1:)' ; then
             echo "approved=true" >> "$GITHUB_OUTPUT"
 

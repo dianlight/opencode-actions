@@ -75,7 +75,7 @@ jobs:
           fi
 
           # Check the body text for approval keywords
-          body="${{ github.event.review.body || github.event.comment.body }}"
+          body=$(echo '${{ toJSON(github.event.review.body || github.event.comment.body) }}' | python3 -c "import sys,json; print(json.load(sys.stdin))" 2>/dev/null) || body=''
           if echo "$body" | grep -qiE '^(approved|lgtm|go ahead|:\+1:)' ; then
             approved="true"
           fi

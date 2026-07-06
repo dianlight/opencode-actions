@@ -23,7 +23,8 @@ concurrency:
 jobs:
   implement:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' &&
+        (github.event.sender.login == 'github-actions[bot]' || github.event.sender.login == 'dianlight' || github.event.sender.login == 'opencode-agent[bot]')) ||
       (
         github.event.label.name == 'opencode:approved-for-implementation' &&
         (github.event.sender.login == 'opencode-agent[bot]' || github.event.sender.login == 'github-actions[bot]' || github.event.sender.login == 'dianlight') &&
