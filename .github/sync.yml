@@ -1,17 +1,20 @@
 dianlight/smartmontools-sdk:
-  - .github/workflows/opencode.yml
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
   - .github/workflows/opencode-implement.yaml
 
 dianlight/hasos_more_modules:
-  - .github/workflows/opencode.yml
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
   - .github/workflows/opencode-implement.yaml
 
 dianlight/srat:
-  - .github/workflows/opencode.yml
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
   - .github/workflows/opencode-implement.yaml
+
+dianlight/hassio-addons:
+  - .github/workflows/opencode-review.yaml
+  - .github/workflows/opencode-triage.yaml
+  - .github/workflows/opencode-implement.yaml
+
