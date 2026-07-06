@@ -37,7 +37,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: opencode/north-mini-code-free
-           use_github_token: true
+          use_github_token: true
           prompt: |
             You are a senior software engineer. Your ONLY job in this run is to
             implement an already-approved proposal — you do not re-triage, you do
