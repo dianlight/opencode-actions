@@ -5,8 +5,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
-  group: opencode-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: false    
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
   review:
