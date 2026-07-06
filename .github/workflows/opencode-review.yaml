@@ -126,4 +126,3 @@ jobs:
             - **Be actionable**: explain *why* it is an issue and always provide a fix via `suggestion` block when a concrete fix is possible.
 
             - **Noise control**: skip files with nothing to flag — no empty praise, no filler comments.
-            
