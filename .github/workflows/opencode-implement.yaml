@@ -17,7 +17,7 @@ on:
         type: string
 
 concurrency:
-  group: opencode-implement-${{ github.event.issue.number || github.event.pull_request.number }}
+group: opencode-implement-${{ github.event.inputs.issue-number || github.event.inputs.pull-request-number || github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
