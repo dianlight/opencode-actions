@@ -109,8 +109,9 @@ jobs:
         if: steps.quick-approval.outputs.approved != 'true'
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          OPENCODE_TRIGGER_BODY: ${{ github.event.review.body || github.event.comment.body }}
+          OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body || github.event.review.body }}
         with:
           model: opencode/deepseek-v4-flash-free
           prompt: |
