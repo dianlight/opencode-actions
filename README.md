@@ -10,7 +10,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-05 08:30 UTC**.
+> Last updated: **2026-07-07 07:52 UTC**.
 > LiveBench data: **127 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -37,6 +37,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `glm-5` | Go (Paid) | ✅ LiveBench | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
 | `glm-5.1` | Go (Paid) | ✅ LiveBench | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
 | `glm-5.2` | Go (Paid) | ✅ LiveBench | 76.2 | 75.9 | 82.1 | 60.7 | 68.2 |
+| `hy3-free` | Free | 📋 Fallback | 55.0 | 50.0 | 60.0 | 40.0 | 55.0 |
 | `hy3-preview` | Go (Paid) | 📋 Fallback | 55.0 | 50.0 | 60.0 | 40.0 | 55.0 |
 | `kimi-k2.5` | Go (Paid) | ✅ LiveBench | 69.2 | 60.1 | 76.7 | 55.0 | 65.3 |
 | `kimi-k2.6` | Go (Paid) | ✅ LiveBench | 72.4 | 66.4 | 77.9 | 58.1 | 69.7 |
@@ -58,14 +59,15 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-05 08:30 UTC**
-> Workflows checked: **3**
-> OpenCode steps found: **3**
+> Audited: **2026-07-07 07:52 UTC**
+> Workflows checked: **4**
+> OpenCode steps found: **4**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|------------------|----------------|--------|
 | `opencode-implement` | `implement` | `Run opencode (implementation only)` | `issue-implementation` | `opencode/north-mini-code-free` | `north-mini-code-free` | 🏆 `glm-5.2` (+12%) | ✅ |
-| `opencode-review` | `review` | `step-1` | `pr-review` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
-| `opencode-triage` | `triage` | `Run opencode (analysis & proposal only)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
+| `opencode-review` | `review` | `step-2` | `pr-review` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
+| `opencode-triage-issue` | `triage` | `Run opencode (analysis & proposal only)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
+| `opencode-triage-pr` | `triage` | `Run opencode (analysis & proposal only)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
 
 _Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). 🏆 marks the preferred model after free-first policy (free within 5% of best Go → prefer free)._
