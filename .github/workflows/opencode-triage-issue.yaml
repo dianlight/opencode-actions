@@ -9,16 +9,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-debug:                          # ← NUOVO JOB
-    runs-on: ubuntu-latest
-    steps:
-      - name: Debug auth info
-        run: |
-          echo "Comment user: ${{ github.event.comment.user.login }}"
-          echo "Author association: ${{ github.event.comment.author_association }}"
-          echo "Issue state: ${{ github.event.issue.state }}"
-          echo "Comment body: ${{ github.event.comment.body }}"
-          echo "Trigger contains /oc: $(echo '${{ github.event.comment.body }}' | grep -c '/oc' || echo '0')"
+  debug:                          # ← NUOVO JOB
+      runs-on: ubuntu-latest
+      steps:
+        - name: Debug auth info
+          run: |
+            echo "Comment user: ${{ github.event.comment.user.login }}"
+            echo "Author association: ${{ github.event.comment.author_association }}"
+            echo "Issue state: ${{ github.event.issue.state }}"
+            echo "Comment body: ${{ github.event.comment.body }}"
+            echo "Trigger contains /oc: $(echo '${{ github.event.comment.body }}' | grep -c '/oc' || echo '0')"
           
   triage:
     if: |
