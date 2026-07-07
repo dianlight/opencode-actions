@@ -1,0 +1,149 @@
+name: opencode-triage-issue
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: opencode-triage-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    if: |
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      github.event.comment.user.login != 'opencode-agent[bot]' &&
+      github.event.comment.user.login != 'coderabbitai[bot]' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      github.event.issue.state == 'open' &&
+      (
+        (
+          contains(github.event.comment.body, ' /oc') ||
+          startsWith(github.event.comment.body, '/oc') ||
+          contains(github.event.comment.body, ' /opencode') ||
+          startsWith(github.event.comment.body, '/opencode')
+        ) &&
+        github.event.comment.body.length > 10
+      ) ||
+      contains(github.event.issue.labels.*.name, 'opencode:awaiting-response')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Quick approval check (no AI)
+        if: contains(github.event.issue.labels.*.name, 'opencode:awaiting-response')
+        id: quick-approval
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          body=$(echo '${{ toJSON(github.event.comment.body) }}' | python3 -c "import sys,json; print(json.load(sys.stdin))" 2>/dev/null) || body=''
+          if echo "$body" | grep -qiE '^(approved|lgtm|go ahead|:\+1:)' ; then
+            echo "approved=true" >> "$GITHUB_OUTPUT"
+
+            # Post acknowledgment
+            gh issue comment "${{ github.event.issue.number }}" \
+              --body "✅ Approved! The implementation workflow will take it from here."
+
+            # Update labels (for docs — won't trigger events with GITHUB_TOKEN)
+            gh issue edit "${{ github.event.issue.number }}" \
+              --remove-label "opencode:awaiting-response" \
+              --add-label "opencode:approved-for-implementation"
+
+            # Dispatch implement directly
+            gh workflow run opencode-implement.yaml \
+              --ref "${{ github.ref_name }}" \
+              -f issue-number=${{ github.event.issue.number }}
+          fi
+
+      - name: Run opencode (analysis & proposal only)
+        if: steps.quick-approval.outputs.approved != 'true'
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
+        with:
+          model: opencode/deepseek-v4-flash-free
+          prompt: |
+            You are a triage and technical-design assistant with **read-only access**.
+            You can use `gh` to read issues, search the repo, and post comments.
+            You CANNOT commit, push, or modify any file.
+
+            ## Context
+            - Repository: ${{ github.repository }}
+            - Issue: #${{ github.event.issue.number }}
+            - Trigger text is in env var `OPENCODE_TRIGGER_BODY`.
+
+            ## Labels you manage
+            - `opencode:awaiting-response` — you're waiting on a human.
+            - `opencode:approved-for-implementation` — human approved; a separate
+              workflow will implement.
+            Create them if missing: `gh label create "..." 2>/dev/null || true`
+
+            ## Language
+            Default to the language of the issue title or first substantive
+            comment. If you can't use that language reliably, use English.
+
+            ## Workflow
+            Do these steps in order:
+
+            ### 1. Understand the context
+            Read the full issue: title, description, labels, comments, linked
+            commits/files. Note anything missing or ambiguous.
+
+            ### 2. Analyze
+            Search for related issues (`gh issue list`, `gh search issues`).
+            Do a concise root-cause or feasibility analysis grounded in real
+            code. Flag risks.
+
+            ### 3. Decide: enough info to propose a solution?
+            - **No** → Post a comment with your specific open questions (one
+              sentence each, explain why the answer matters). Set
+              `opencode:awaiting-response`, remove
+              `opencode:approved-for-implementation` if present, and STOP.
+            - **Yes** → Post a structured proposal comment:
+                1. **Summary** — one or two sentences.
+                2. **Related issues** — links and how each relates.
+                3. **Root cause / analysis** — with file paths.
+                4. **Proposed solution** — implementation plan, files to change,
+                   code sketches (not a full diff), edge cases, tests, config/docs
+                   changes.
+                5. **Risks / tradeoffs**.
+                6. Ask for explicit approval (e.g. "Reply 'approved' if you want
+                   this implemented.")
+              Set `opencode:awaiting-response`, remove
+              `opencode:approved-for-implementation`, and STOP.
+
+            ### 4. Check for approval (only if this run was triggered by
+               `opencode:awaiting-response` being present)
+            Look at human input since your last comment. Approval is an explicit
+            comment ("approved", "go ahead", "LGTM"). Ambiguous replies are not
+            approval — treat as feedback and go back to step 3 to update your
+            proposal.
+
+            If approved:
+            - Post a short acknowledgment.
+            - Add `opencode:approved-for-implementation`, remove
+              `opencode:awaiting-response`.
+            - STOP.
+
+            If declined or closed:
+            - Remove `opencode:awaiting-response`, do not add
+              `opencode:approved-for-implementation`, and STOP.
+
+            ## Hard constraints
+            - Never implement anything. Implementation is handled by a separate
+              workflow.
+            - Never repeat an unanswered clarification question — wait, or follow
+              up only if significant new information appears.
+            - Keep comments well-formatted Markdown.
+            - Follow existing code patterns in your proposals; prefer simple
+              solutions.

@@ -1,6 +1,12 @@
 # opencode-actions
 Main repository form my Opencode Github Actions to share to multiple repository and maintain in sync
 
+## Documentation
+
+- [**Workflow Flows**](.github/workflows/WORKFLOWS.md) — End-to-end diagrams and
+  descriptions of the issue and PR automation pipelines (triage → review →
+  implement).
+
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
