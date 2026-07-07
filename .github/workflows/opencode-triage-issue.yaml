@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  debug:                          # ← NUOVO JOB
+  debug:
       runs-on: ubuntu-latest
       steps:
         - name: Debug auth info
@@ -18,8 +18,19 @@ jobs:
             echo "Author association: ${{ github.event.comment.author_association }}"
             echo "Issue state: ${{ github.event.issue.state }}"
             echo "Comment body: ${{ github.event.comment.body }}"
-            echo "Trigger contains /oc: $(echo '${{ github.event.comment.body }}' | grep -c '/oc' || echo '0')"
-          
+            echo "Body length: ${{ github.event.comment.body.length }}"
+            echo "Contains /oc: $(echo '${{ github.event.comment.body }}' | grep -E '(^| )/oc' && echo 'yes' || echo 'no')"
+            echo "Has awaiting-response label: $(echo '${{ github.event.issue.labels.*.name }}' | grep -c 'opencode:awaiting-response' || echo '0')"
+            
+        - name: Test condition parts
+          run: |
+            body_contains_oc=false
+            if echo "${{ github.event.comment.body }}" | grep -qE "(^/oc|^ /oc)"; then
+              body_contains_oc=true
+            fi
+            echo "Body starts/contains /oc: $body_contains_oc"
+            echo "Body length > 10: $([ ${#'${{ github.event.comment.body }}'} -gt 10 ] && echo 'yes' || echo 'no')"
+
   triage:
     if: |
       github.event.comment.user.login != 'github-actions[bot]' &&
