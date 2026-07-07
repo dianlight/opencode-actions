@@ -10,26 +10,26 @@ concurrency:
 
 jobs:
   debug:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Debug auth info
-          run: |
-            echo "Comment user: ${{ github.event.comment.user.login }}"
-            echo "Author association: ${{ github.event.comment.author_association }}"
-            echo "Issue state: ${{ github.event.issue.state }}"
-            echo "Comment body: ${{ github.event.comment.body }}"
-            echo "Body length: ${{ github.event.comment.body.length }}"
-            echo "Contains /oc: $(echo '${{ github.event.comment.body }}' | grep -E '(^| )/oc' && echo 'yes' || echo 'no')"
-            echo "Has awaiting-response label: $(echo '${{ github.event.issue.labels.*.name }}' | grep -c 'opencode:awaiting-response' || echo '0')"
-            
-        - name: Test condition parts
-          run: |
-            body_contains_oc=false
-            if echo "${{ github.event.comment.body }}" | grep -qE "(^/oc|^ /oc)"; then
-              body_contains_oc=true
-            fi
-            echo "Body starts/contains /oc: $body_contains_oc"
-            echo "Body length > 10: $([ ${#'${{ github.event.comment.body }}'} -gt 10 ] && echo 'yes' || echo 'no')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug auth info
+        run: |
+          echo "Comment user: ${{ github.event.comment.user.login }}"
+          echo "Author association: ${{ github.event.comment.author_association }}"
+          echo "Issue state: ${{ github.event.issue.state }}"
+          echo "Comment body: ${{ github.event.comment.body }}"
+          echo "Body length: ${{ github.event.comment.body.length }}"
+          echo "Contains /oc: $(echo '${{ github.event.comment.body }}' | grep -E '(^| )/oc' && echo 'yes' || echo 'no')"
+          echo "Has awaiting-response label: $(echo '${{ github.event.issue.labels.*.name }}' | grep -c 'opencode:awaiting-response' || echo '0')"
+
+      - name: Test condition parts
+        run: |
+          body_contains_oc=false
+          if echo "${{ github.event.comment.body }}" | grep -qE "(^/oc|^ /oc)"; then
+            body_contains_oc=true
+          fi
+          echo "Body starts/contains /oc: $body_contains_oc"
+          echo "Body length > 10: $([ ${#'${{ github.event.comment.body }}'} -gt 10 ] && echo 'yes' || echo 'no')"
 
   triage:
     if: |
@@ -53,7 +53,7 @@ jobs:
       pull-requests: write
       issues: write
       id-token: write
-      actions: write   
+      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -72,15 +72,15 @@ jobs:
 
             # Post acknowledgment
             gh issue comment "${{ github.event.issue.number }}" \
-              --body "✅ Approved! The implementation workflow will take it from here."
+              --body "✅ Approved! Creating a new PR with the implementation."
 
             # Update labels (for docs — won't trigger events with GITHUB_TOKEN)
             gh issue edit "${{ github.event.issue.number }}" \
               --remove-label "opencode:awaiting-response" \
               --add-label "opencode:approved-for-implementation"
 
-            # Dispatch implement directly
-            gh workflow run opencode-implement.yaml \
+            # Dispatch PR creation workflow
+            gh workflow run opencode-new-pr.yaml \
               --ref "${{ github.ref_name }}" \
               -f issue-number=${{ github.event.issue.number }}
           fi
@@ -135,9 +135,13 @@ jobs:
                 1. **Summary** — one or two sentences.
                 2. **Related issues** — links and how each relates.
                 3. **Root cause / analysis** — with file paths.
-                4. **Proposed solution** — implementation plan, files to change,
-                   code sketches (not a full diff), edge cases, tests, config/docs
-                   changes.
+                4. **Proposed solution** — MUST be written as a markdown task
+                   list of small, sequential, independently implementable tasks.
+                   Each task must be a single `- [ ]` checklist item that is
+                   concrete and actionable (e.g. `- [ ] Add database migration`,
+                   `- [ ] Update API endpoint`, `- [ ] Add frontend component`).
+                   Also include a brief description before the list. The
+                   checklist items will be extracted and executed one by one.
                 5. **Risks / tradeoffs**.
                 6. Ask for explicit approval (e.g. "Reply 'approved' if you want
                    this implemented.")
@@ -155,6 +159,8 @@ jobs:
             - Post a short acknowledgment.
             - Add `opencode:approved-for-implementation`, remove
               `opencode:awaiting-response`.
+            - Dispatch the PR creation workflow to start implementation:
+              `gh workflow run opencode-new-pr.yaml --ref ${{ github.ref_name }} -f issue-number=${{ github.event.issue.number }}`
             - STOP.
 
             If declined or closed:

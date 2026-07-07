@@ -1,27 +1,31 @@
 dianlight/smartmontools-sdk:
+  - .github/workflows/opencode-implement.yaml
+  - .github/workflows/opencode-new-pr.yaml
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
   - .github/workflows/opencode-triage-issue.yaml
   - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml
 
 dianlight/hasos_more_modules:
+  - .github/workflows/opencode-implement.yaml
+  - .github/workflows/opencode-new-pr.yaml
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
   - .github/workflows/opencode-triage-issue.yaml
   - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml
 
 dianlight/srat:
+  - .github/workflows/opencode-implement.yaml
+  - .github/workflows/opencode-new-pr.yaml
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
   - .github/workflows/opencode-triage-issue.yaml
   - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml
 
 dianlight/hassio-addons:
+  - .github/workflows/opencode-implement.yaml
+  - .github/workflows/opencode-new-pr.yaml
   - .github/workflows/opencode-review.yaml
   - .github/workflows/opencode-triage.yaml
   - .github/workflows/opencode-triage-issue.yaml
   - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml

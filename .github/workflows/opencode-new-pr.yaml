@@ -1,0 +1,188 @@
+name: opencode-new-pr
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: "Issue number"
+        required: true
+        type: string
+
+concurrency:
+  group: opencode-new-pr-${{ github.event.inputs.issue-number }}
+  cancel-in-progress: false
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    outputs:
+      pr-number: ${{ steps.create-pr.outputs.pr-number }}
+      task-list: ${{ steps.extract-tasks.outputs.task-list }}
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch issue and extract task list
+        id: extract-tasks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER="${{ github.event.inputs.issue-number }}"
+          ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --json title -q '.title')
+          echo "issue-title=$ISSUE_TITLE" >> "$GITHUB_OUTPUT"
+          gh api "/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
+            --paginated > /tmp/comments.json 2>/dev/null
+          python3 -c '
+          import json, re
+          with open("/tmp/comments.json") as f:
+              comments = json.load(f)
+          if isinstance(comments, dict):
+              comments = [comments]
+          target = None
+          for c in reversed(comments):
+              body = c.get("body", "")
+              if "proposed solution" in body.lower() and ("- [ ]" in body or "- [x]" in body):
+                  target = c
+                  break
+          if not target:
+              for c in reversed(comments):
+                  body = c.get("body", "")
+                  if "- [ ]" in body:
+                      target = c
+                      break
+          tasks = []
+          if target:
+              for line in target["body"].split("\n"):
+                  m = re.match(r"^\s*-\s*\[[ x]\]\s*(.+)$", line)
+                  if m:
+                      tasks.append(m.group(1).strip())
+          if not tasks:
+              tasks = ["Implement the approved proposal"]
+          result = json.dumps(tasks)
+          print(result)
+          with open("/tmp/task-list.json", "w") as f:
+              f.write(result)
+          '
+          echo "task-list=$(cat /tmp/task-list.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update CHANGELOG.md
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue-number }}
+          ISSUE_TITLE: ${{ steps.extract-tasks.outputs.issue-title }}
+          TASKS: ${{ steps.extract-tasks.outputs.task-list }}
+        run: |
+          python3 -c '
+          import json, os
+          changelog_path = "CHANGELOG.md"
+          issue_number = os.environ["ISSUE_NUMBER"]
+          issue_title = os.environ["ISSUE_TITLE"]
+          tasks = json.loads(os.environ.get("TASKS", "[]"))
+          entry = f"## [#{issue_number}] - {issue_title}\n\n### Added\n"
+          for task in tasks:
+              entry += f"- {task}\n"
+          entry += "\n"
+          if os.path.exists(changelog_path):
+              with open(changelog_path) as f:
+                  content = f.read()
+              content = entry + content
+          else:
+              content = f"# Changelog\n\n{entry}"
+          with open(changelog_path, "w") as f:
+              f.write(content)
+          '
+          git config user.name "opencode-agent[bot]"
+          git config user.email "opencode-agent[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: add changelog entry for issue #$ISSUE_NUMBER" || echo "No changes to commit"
+
+      - name: Create branch and pull request
+        id: create-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER="${{ github.event.inputs.issue-number }}"
+          ISSUE_TITLE="${{ steps.extract-tasks.outputs.issue-title }}"
+          TASKS='${{ steps.extract-tasks.outputs.task-list }}'
+          DEFAULT_BRANCH=$(gh repo view --json defaultBranch -q '.defaultBranch')
+          SAFE_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | head -c 30)
+          BRANCH="opencode/issue-${ISSUE_NUMBER}-${SAFE_TITLE}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH" 2>/dev/null || git push -u origin "$BRANCH"
+          PR_BODY="Closes #${ISSUE_NUMBER}\n\n## Description\n\n${ISSUE_TITLE}\n\n## Tasks\n"
+          while IFS= read -r task; do
+            PR_BODY="${PR_BODY}\n- [ ] ${task}"
+          done <<< "$(echo "$TASKS" | jq -r '.[]')"
+          PR_URL=$(gh pr create \
+            --base "$DEFAULT_BRANCH" \
+            --head "$BRANCH" \
+            --title "feat: implement #${ISSUE_NUMBER} - ${ISSUE_TITLE}" \
+            --body "$(echo -e "$PR_BODY")")
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          gh issue comment "$ISSUE_NUMBER" \
+            --body "✅ Pull request #${PR_NUMBER} created: ${PR_URL}"
+
+  execute-tasks:
+    needs: create-pr
+    if: needs.create-pr.outputs.task-list != '[]' && needs.create-pr.outputs.task-list != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: write
+    steps:
+      - name: Execute each task sequentially
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ needs.create-pr.outputs.pr-number }}"
+          TASKS='${{ needs.create-pr.outputs.task-list }}'
+          REF="${{ github.ref_name }}"
+          echo "$TASKS" | jq -r '.[]' | while IFS= read -r task; do
+            echo ""
+            echo "=========================================="
+            echo "=== Implementing: $task ==="
+            echo "=========================================="
+            BEFORE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            gh workflow run opencode-implement.yaml \
+              --ref "$REF" \
+              -f pull-request-number="$PR_NUMBER" \
+              -f "task-description=$task"
+            echo "Dispatched. Waiting for the run to appear..."
+            RUN_ID=""
+            for i in $(seq 1 20); do
+              sleep 3
+              RUN_ID=$(gh run list \
+                --workflow=opencode-implement.yaml \
+                --limit 10 \
+                --json databaseId,createdAt \
+                -q "[.[] | select(.createdAt > \"$BEFORE\")] | .[0].databaseId // empty" \
+                2>/dev/null)
+              if [ -n "$RUN_ID" ]; then
+                echo "Found run: $RUN_ID"
+                break
+              fi
+            done
+            if [ -n "$RUN_ID" ]; then
+              echo "Waiting for run $RUN_ID to complete..."
+              gh run watch "$RUN_ID" --exit-status 2>&1 || {
+                echo "ERROR: Task implementation failed: $task"
+                exit 1
+              }
+              echo "Task completed successfully."
+            else
+              echo "ERROR: Could not find the dispatched workflow run"
+              exit 1
+            fi
+          done
+          echo ""
+          echo "=========================================="
+          echo "=== All tasks completed successfully ==="
+          echo "=========================================="

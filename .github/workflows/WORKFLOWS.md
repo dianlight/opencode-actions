@@ -1,14 +1,16 @@
 # OpenCode Workflow Flows
 
-This repository contains four GitHub Actions workflows that implement two
-end-to-end automation pipelines: one for **issues** (triage → implement) and one
-for **pull requests** (review → triage → implement).
+This repository contains five GitHub Actions workflows that implement two
+end-to-end automation pipelines: one for **issues** (triage → PR creation →
+sequential task implementation) and one for **pull requests** (review → triage →
+implementation).
 
 ## Issue Flow
 
 Triggered when a collaborator posts `/oc` (or `/opencode`) on an issue. The
 workflow triages the request, iterates with the reporter, and — once approved —
-creates a new pull request with the implementation.
+creates a new pull request with a CHANGELOG entry and the full task list in the
+body. Each task is then implemented sequentially against that PR branch.
 
 ```mermaid
 flowchart TD
@@ -16,24 +18,31 @@ flowchart TD
     B --> C{"`opencode:awaiting-response` label present?"}
     C -- No --> D{"Enough info?"}
     C -- Yes --> E{"Quick approval match?"}
-    E -- "approved / LGTM / go ahead / :+1:" --> F["Post acknowledgment + update labels + dispatch implement"]
+    E -- "approved / LGTM / go ahead / :+1:" --> F["Post acknowledgment + update labels + dispatch new-pr"]
     E -- Other reply --> D
     D -- No --> G["Post clarifying questions"]
     G --> H["Set opencode:awaiting-response"]
     H --> I["Human replies with more info"]
     I --> B
-    D -- Yes --> J["Post structured proposal"]
+    D -- Yes --> J["Post structured proposal as task list"]
     J --> K["Set opencode:awaiting-response"]
     K --> L{"Human response"}
     L -- "New instruction / feedback" --> B
     L -- "Approved (comment)" --> M["Post acknowledgment"]
     M --> N["Set opencode:approved-for-implementation"]
-    N --> O["opencode-implement.yaml"]
-    O --> P["Create branch from default branch"]
-    P --> Q["Implement + commit + push"]
-    Q --> R["Open PR with 'Closes #N'"]
-    
-    F --> O
+    N --> O["Dispatch opencode-new-pr.yaml"]
+    O --> P["opencode-new-pr.yaml"]
+    P --> Q["Create/update CHANGELOG.md"]
+    Q --> R["Create feature branch"]
+    R --> S["Open PR with task list in body"]
+
+    F --> P
+
+    S --> T{"For each task (sequentially)"}
+    T --> U["Dispatch opencode-implement.yaml"]
+    U --> V["Checkout existing PR branch"]
+    V --> W["Implement task + commit + push"]
+    W --> T
 ```
 
 ### Workflow state labels
@@ -48,7 +57,8 @@ flowchart TD
 | Workflow | File | Trigger |
 |----------|------|---------|
 | **Triage (issue)** | `.github/workflows/opencode-triage-issue.yaml` | `issue_comment` containing `/oc`, or label `opencode:awaiting-response` present. Quick approval matched by shell keyword check (no AI). |
-| **Implement** | `.github/workflows/opencode-implement.yaml` | `issues: [labeled]` with `opencode:approved-for-implementation` |
+| **Orchestrator** | `.github/workflows/opencode-new-pr.yaml` | `workflow_dispatch` with `issue-number` from triage approval |
+| **Implement** | `.github/workflows/opencode-implement.yaml` | `pull_request: [labeled]` with `opencode:approved-for-implementation`, or `workflow_dispatch` with `pull-request-number` (per-task from orchestrator) |
 
 ---
 
@@ -104,15 +114,27 @@ flowchart TD
 
 ---
 
-## Implement workflow behaviour
+## Workflow behaviours
 
-The `opencode-implement.yaml` workflow handles both trigger sources by
-inspecting which event payload is present:
+### `opencode-new-pr.yaml` — Issue PR orchestrator
+
+Triggered by `workflow_dispatch` with an `issue-number` from the triage workflow
+after approval. This workflow replaces the old behaviour where
+`opencode-implement.yaml` directly handled issue triggers. It has two jobs:
+
+| Job | Action |
+|-----|--------|
+| **create-pr** | Fetches the approved proposal comment from the issue, extracts the markdown task list (`- [ ]` items), creates/updates `CHANGELOG.md` with the issue summary and task list, creates a feature branch, and opens a PR with the task list as checkboxes in the body — all links back to the issue with `Closes #N`. |
+| **execute-tasks** | Iterates through each task sequentially. For each task, dispatches `opencode-implement.yaml` with `pull-request-number` and `task-description`, then waits for that run to complete before moving to the next task. Fails fast if any task fails. |
+
+### `opencode-implement.yaml` — PR-only implementation
+
+This workflow now only handles pull request triggers:
 
 | Trigger | Action |
 |---------|--------|
-| **Issue** (`github.event.issue` present, or `workflow_dispatch` with `issue-number`) | Creates a new feature branch from the default branch, implements, commits, pushes, and opens a PR referencing the issue with `Closes #N` |
-| **Pull request** (`github.event.pull_request` present, or `workflow_dispatch` with `pull-request-number`) | Checkouts the existing PR branch via `gh pr checkout`, implements, commits, and pushes to that same branch |
+| **Pull request label** (`pull_request: [labeled]` with `opencode:approved-for-implementation`) | Checkouts the existing PR branch via `gh pr checkout`, implements the full approved proposal, commits, and pushes to that same branch |
+| **Workflow dispatch** (from `opencode-new-pr.yaml` with `pull-request-number` + `task-description`) | Checkouts the PR branch and implements only the specific task described by `task-description` |
 
 ## Token strategy
 
@@ -121,8 +143,10 @@ inspecting which event payload is present:
   workflow events.
 - **triage-issue** and **triage-pr** also have a pre-step that uses
   `GITHUB_TOKEN` for quick approval detection via shell keyword matching — this
-  bypasses the AI entirely for simple approvals and dispatches the implement
-  workflow directly via `workflow_dispatch`.
+  bypasses the AI entirely for simple approvals and dispatches the orchestrator
+  or implement workflow directly via `workflow_dispatch`.
+- **opencode-new-pr** uses `GITHUB_TOKEN` for API calls (branch creation, PR
+  creation, commenting) and the OpenCode API key for CHANGELOG creation.
 - **review** and **implement** use the built-in `GITHUB_TOKEN`
   (`use_github_token: true`) since they do not need to chain further workflow
   events.
@@ -138,9 +162,18 @@ keywords (`approved`, `LGTM`, `go ahead`, `:+1:`) or, in the PR workflow, an
 
 1. Posts an acknowledgment (issue comment or PR review)
 2. Updates labels (for documentation — via `GITHUB_TOKEN`)
-3. Dispatches the implement workflow via `workflow_dispatch`
+3. Dispatches the downstream workflow:
+   - **Issue flow:** dispatches `opencode-new-pr.yaml` (orchestrator)
+   - **PR flow:** dispatches `opencode-implement.yaml` directly
 
 This completely bypasses the AI, saving one full triage run per approval cycle.
+
+### Sequential task execution
+
+The `opencode-new-pr.yaml` orchestrator runs tasks one at a time. Each task is
+dispatched to `opencode-implement.yaml`, and the orchestrator waits for that run
+to complete before proceeding. If a task fails, execution stops immediately —
+subsequent tasks are not attempted.
 
 ### Draft PR skip
 

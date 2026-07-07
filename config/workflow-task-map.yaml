@@ -5,6 +5,7 @@
 
 workflow_task_map:
   "opencode-implement": "issue-implementation"
+  "opencode-new-pr": "issue-implementation"
   "opencode-review": "pr-review"
   "opencode-triage-pr": "issue-triage"
   "opencode-triage-issue": "issue-triage"
