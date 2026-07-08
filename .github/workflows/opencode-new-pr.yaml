@@ -101,7 +101,14 @@ jobs:
           git config user.name "opencode-agent[bot]"
           git config user.email "opencode-agent[bot]@users.noreply.github.com"
           git add CHANGELOG.md
-          git commit -m "docs: add changelog entry for issue #$ISSUE_NUMBER" || echo "No changes to commit"
+          git commit -m "docs: add changelog entry for issue #$ISSUE_NUMBER" || {
+            rc=$?
+            if [ $rc -eq 1 ]; then
+              echo "No changes to commit"
+            else
+              exit $rc
+            fi
+          }
 
       - name: Create branch and pull request
         id: create-pr
@@ -112,10 +119,10 @@ jobs:
           ISSUE_TITLE="${{ steps.extract-tasks.outputs.issue-title }}"
           TASKS='${{ steps.extract-tasks.outputs.task-list }}'
           DEFAULT_BRANCH=$(gh repo view --json defaultBranch -q '.defaultBranch')
-          SAFE_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | head -c 30)
+          SAFE_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | head -c 60)
           BRANCH="opencode/issue-${ISSUE_NUMBER}-${SAFE_TITLE}"
           git checkout -b "$BRANCH"
-          git push origin "$BRANCH" 2>/dev/null || git push -u origin "$BRANCH"
+          git push -u origin "$BRANCH"
           PR_BODY="Closes #${ISSUE_NUMBER}\n\n## Description\n\n${ISSUE_TITLE}\n\n## Tasks\n"
           while IFS= read -r task; do
             PR_BODY="${PR_BODY}\n- [ ] ${task}"
@@ -124,7 +131,23 @@ jobs:
             --base "$DEFAULT_BRANCH" \
             --head "$BRANCH" \
             --title "feat: implement #${ISSUE_NUMBER} - ${ISSUE_TITLE}" \
-            --body "$(echo -e "$PR_BODY")")
+          PR_BODY="Closes #${ISSUE_NUMBER}
+
+## Description
+
+${ISSUE_TITLE}
+
+## Tasks
+"
+          while IFS= read -r task; do
+            PR_BODY="${PR_BODY}
+- [ ] ${task}"
+          done <<< "$(echo "$TASKS" | jq -r '.[]')"
+          PR_URL=$(gh pr create \
+            --base "$DEFAULT_BRANCH" \
+            --head "$BRANCH" \
+            --title "feat: implement #${ISSUE_NUMBER} - ${ISSUE_TITLE}" \
+            --body "$PR_BODY")
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           gh issue comment "$ISSUE_NUMBER" \
