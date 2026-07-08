@@ -154,7 +154,7 @@ jobs:
             gh workflow run opencode-implement.yaml \
               --ref "$REF" \
               -f pull-request-number="$PR_NUMBER" \
-              -f "task-description=$task"
+              -f "$(echo "$task" | jq -R -s 'sub("\n$";"") | @json' | jq -r '"task-description=" + .') "
             echo "Dispatched. Waiting for the run to appear..."
             RUN_ID=""
             for i in $(seq 1 20); do
@@ -164,6 +164,18 @@ jobs:
                 --limit 10 \
                 --json databaseId,createdAt \
                 -q "[.[] | select(.createdAt > \"$BEFORE\")] | .[0].databaseId // empty" \
+                2>/dev/null)
+              if [ -n "$RUN_ID" ]; then
+                echo "Found run: $RUN_ID"
+                break
+              fi
+            for i in $(seq 1 100); do
+              sleep 3
+              RUN_ID=$(gh run list \
+                --workflow=opencode-implement.yaml \
+                --limit 20 \
+                --json databaseId,createdAt \
+                -q "[.[] | select(.createdAt >= \"$BEFORE\")] | .[0].databaseId // empty" \
                 2>/dev/null)
               if [ -n "$RUN_ID" ]; then
                 echo "Found run: $RUN_ID"
