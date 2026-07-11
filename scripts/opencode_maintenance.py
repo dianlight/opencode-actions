@@ -580,6 +580,139 @@ def get_best_models_for_task(
     return best_free, best_go
 
 
+def get_best_zen_model_for_task(
+    task_type: str,
+    zen_models: list,
+    livebench: dict,
+    task_types: list,
+) -> tuple:
+    """Find best model across ALL Zen models (free + paid) for a task type.
+
+    Returns (model_id, score, subscore_used) or (None, None, None).
+    This is the overall best model regardless of tier, used as the
+    benchmark reference in recommendation and audit tables.
+    """
+    tt = next((t for t in task_types if t["name"] == task_type), None)
+    if not tt:
+        return None, None, None
+
+    priority = tt.get("priority", "overall")
+
+    zen_ids = [m["id"] for m in zen_models]
+    scored = []
+    for model_id in zen_ids:
+        score = get_model_score(model_id, livebench, priority)
+        if score is not None:
+            scored.append((model_id, score))
+
+    if not scored:
+        return None, None, None
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    best_id, best_score = scored[0]
+    return best_id, best_score, priority
+
+
+def score_all_zen_models(
+    zen_models: list,
+    livebench: dict,
+    task_types: list,
+) -> dict:
+    """Score every Zen model across all task types.
+
+    Returns: {
+        task_type_name: [
+            {"model": id, "score": float, "source": str, "rank": int},
+            ...
+        ]
+    }
+    """
+    zen_ids = [m["id"] for m in zen_models]
+    result = {}
+    for tt in task_types:
+        name = tt["name"]
+        priority = tt.get("priority", "overall")
+        scored = []
+        for model_id in zen_ids:
+            score = get_model_score(model_id, livebench, priority)
+            source = get_model_source(model_id, livebench)
+            if score is not None:
+                scored.append({
+                    "model": model_id,
+                    "score": score,
+                    "source": source,
+                })
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        for i, entry in enumerate(scored, 1):
+            entry["rank"] = i
+        result[name] = scored
+    return result
+
+
+def get_benchmark_summary(
+    zen_models: list,
+    go_models: list,
+    livebench: dict,
+    task_types: list,
+) -> dict:
+    """Generate a benchmark summary with best models per task type.
+
+    This creates the data for data/benchmark_results.json:
+    - best_zen_per_task: best overall Zen model for each task type
+    - best_go_per_task: best Go (paid) model for each task type (= benchmark ceiling)
+    - all_zen_ranked: full ranking of all Zen models per task type
+    """
+    go_ids = {m["id"] for m in go_models}
+
+    best_zen_per_task = {}
+    best_go_per_task = {}
+    for tt in task_types:
+        name = tt["name"]
+        priority = tt.get("priority", "overall")
+
+        # Best Zen
+        zid, zscore, _ = get_best_zen_model_for_task(
+            name, zen_models, livebench, task_types
+        )
+        best_zen_per_task[name] = {
+            "model": zid,
+            "score": zscore,
+            "subscore": priority,
+        }
+
+        # Best Go (paid) = benchmark ceiling
+        zen_ids = [m["id"] for m in zen_models]
+        go_scored = []
+        for model_id in zen_ids:
+            if model_id not in go_ids:
+                continue
+            score = get_model_score(model_id, livebench, priority)
+            if score is not None:
+                go_scored.append((model_id, score))
+        if go_scored:
+            go_scored.sort(key=lambda x: x[1], reverse=True)
+            gid, gscore = go_scored[0]
+            best_go_per_task[name] = {
+                "model": gid,
+                "score": gscore,
+                "subscore": priority,
+            }
+        else:
+            best_go_per_task[name] = {
+                "model": None,
+                "score": None,
+                "subscore": priority,
+            }
+
+    all_zen_ranked = score_all_zen_models(zen_models, livebench, task_types)
+
+    return {
+        "best_zen_per_task": best_zen_per_task,
+        "best_go_per_task": best_go_per_task,
+        "all_zen_ranked": all_zen_ranked,
+    }
+
+
 def apply_free_first_rule(
     best_free: str,
     best_go: str,
@@ -698,8 +831,12 @@ def generate_model_recommendation_table(
     go_models: list,
     livebench: dict,
     threshold_pct: float,
+    zen_models: list = None,
 ) -> str:
-    """Generate the task-type model recommendation table."""
+    """Generate the task-type model recommendation table.
+
+    Columns: Task Type | Description | Best Zen Model | Zen Score | Best Free Model | Free Score | Best Go Model | Go Score
+    """
     models = _lb_models(livebench)
     snapshot_date = (
         livebench.get("_snapshot_date") if isinstance(livebench, dict) else None
@@ -721,11 +858,13 @@ def generate_model_recommendation_table(
         [
             f"> Free-first threshold: **{threshold_pct}%**.",
             "",
-            "| Task Type | Description | Best Free Model | Free Score | Best Go Model | Go Score |",
-            "|-----------|-------------|-----------------|------------|---------------|----------|",
+            "| Task Type | Description | Best Zen Model | Zen Score | Best Free Model | Free Score | Best Go Model | Go Score |",
+            "|-----------|-------------|----------------|-----------|-----------------|------------|---------------|----------|",
         ]
     )
     lines = header_lines
+
+    all_zen = zen_models if zen_models else []
 
     for tt in task_types:
         name = tt["name"]
@@ -739,36 +878,73 @@ def generate_model_recommendation_table(
             best_free, best_go, livebench, priority, threshold_pct
         )
 
+        # Best Zen model (overall best from all Zen models)
+        zen_id, zen_score, _ = get_best_zen_model_for_task(
+            name, all_zen, livebench, task_types
+        )
+
         free_score = (
             get_model_score(best_free, livebench, priority) if best_free else None
         )
         go_score = get_model_score(best_go, livebench, priority) if best_go else None
 
+        zen_score_str = str(zen_score) if zen_score is not None else "—"
         free_score_str = str(free_score) if free_score is not None else "—"
         go_score_str = str(go_score) if go_score is not None else "—"
+        zen_model_str = f"`{zen_id}`" if zen_id else "—"
         free_model_str = f"`{best_free}`" if best_free else "—"
         go_model_str = f"`{best_go}`" if best_go else "—"
 
         lines.append(
-            f"| `{name}` | {desc} | {free_model_str} | {free_score_str} | {go_model_str} | {go_score_str} |"
+            f"| `{name}` | {desc} | {zen_model_str} | {zen_score_str} | {free_model_str} | {free_score_str} | {go_model_str} | {go_score_str} |"
         )
 
     return "\n".join(lines)
 
 
 def generate_score_reference_table(
-    livebench: dict, free_models: list, go_models: list
+    livebench: dict,
+    free_models: list,
+    go_models: list,
+    zen_models: list = None,
+    task_types: list = None,
 ) -> str:
-    """Generate the detailed score reference table with source indicators."""
+    """Generate the detailed score reference table with source indicators.
+
+    Adds a "Best For" column that shows which task types a model is the
+    best Zen model for, using emoji badges for visual distinction.
+    """
     models = _lb_models(livebench)
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
+
+    # Build a reverse map: model -> list of task types it's best Zen for
+    best_for_map = {}
+    if zen_models and task_types:
+        for tt in task_types:
+            zen_id, _, _ = get_best_zen_model_for_task(
+                tt["name"], zen_models, livebench, task_types
+            )
+            if zen_id:
+                best_for_map.setdefault(zen_id, []).append(tt["name"])
+
+    # Short labels for task types in badges
+    TASK_BADGES = {
+        "issue-triage": "🔍Triage",
+        "issue-implementation": "🔨Impl",
+        "pr-review": "👀Review",
+        "code-implementation": "💻Code",
+        "frontend-design": "🎨Design",
+        "frontend-testing": "🧪FTest",
+        "api-testing": "🔌ATest",
+        "other": "📦Other",
+    }
 
     lines = [
         "",
         "### LiveBench Score Reference",
         "",
-        "| Model | Tier | Source | Overall | Coding | Reasoning | Vision | Instruction Following |",
-        "|-------|------|--------|---------|--------|-----------|--------|----------------------|",
+        "| Model | Tier | Source | Best For | Overall | Coding | Reasoning | Vision | Instruction Following |",
+        "|-------|------|--------|----------|---------|--------|-----------|--------|----------------------|",
     ]
 
     for model_id in sorted(all_model_ids):
@@ -780,13 +956,22 @@ def generate_score_reference_table(
             src_icon = "📋 Fallback"
         else:
             src_icon = "❌ Missing"
+
+        # Best-for badges
+        tasks = best_for_map.get(model_id, [])
+        if tasks:
+            badges = " ".join(TASK_BADGES.get(t, t) for t in tasks)
+            best_for_cell = f"🏆 {badges}"
+        else:
+            best_for_cell = "—"
+
         ov = get_model_score(model_id, livebench, "overall")
         cd = get_model_score(model_id, livebench, "coding")
         re_s = get_model_score(model_id, livebench, "reasoning")
         vs = get_model_score(model_id, livebench, "vision")
         if_ = get_model_score(model_id, livebench, "instruction_following")
         lines.append(
-            f"| `{model_id}` | {tier} | {src_icon} | "
+            f"| `{model_id}` | {tier} | {src_icon} | {best_for_cell} | "
             f"{ov if ov is not None else '—'} | {cd if cd is not None else '—'} | "
             f"{re_s if re_s is not None else '—'} | {vs if vs is not None else '—'} | "
             f"{if_ if if_ is not None else '—'} |"
@@ -802,10 +987,18 @@ def generate_workflow_audit_table(
     livebench: dict,
     task_types: list,
     threshold_pct: float,
+    zen_models: list = None,
 ) -> str:
-    """Generate the workflow audit table with status icons."""
+    """Generate the workflow audit table with status icons.
+
+    Columns: Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Zen vs Current | Recommended Free | Recommended Go | Status
+    The "Zen vs Current" column shows the percentage difference between the
+    recommended Zen model and the current model's score.
+    """
     if not scan_results:
         return "\n## Workflow Model Audit\n\n> No OpenCode workflows found (excluding maintenance workflow).\n"
+
+    all_zen = zen_models if zen_models else []
 
     lines = [
         "",
@@ -815,14 +1008,14 @@ def generate_workflow_audit_table(
         f"> Workflows checked: **{len(set(r['file'] for r in scan_results))}**",
         f"> OpenCode steps found: **{len(scan_results)}**",
         "",
-        "| Workflow | Job | Step | Task Type | Current Model | Recommended Free | Recommended Go | Status |",
-        "|----------|-----|------|-----------|---------------|------------------|----------------|--------|",
+        "| Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Zen vs Current | Recommended Free | Recommended Go | Status |",
+        "|----------|-----|------|-----------|---------------|-----------------|----------------|------------------|----------------|--------|",
     ]
 
     for r in scan_results:
         if "error" in r:
             lines.append(
-                f"| `{r['file']}` | — | — | `parse-error` | — | — | — | ❌ Parse Error |"
+                f"| `{r['file']}` | — | — | `parse-error` | — | — | — | — | — | ❌ Parse Error |"
             )
             continue
 
@@ -842,16 +1035,35 @@ def generate_workflow_audit_table(
             threshold_pct,
         )
 
-        status = classify_model_status(current, best_free, best_go)
-
-        # Compute percentage diff and trophy display
+        # Best Zen model and % diff vs current
+        zen_id, zen_score, _ = get_best_zen_model_for_task(
+            task_type, all_zen, livebench, task_types
+        )
         priority = next(
             (t["priority"] for t in task_types if t["name"] == task_type), "overall"
         )
+        current_score = get_model_score(
+            _strip_model_prefix(current), livebench, priority
+        )
+
+        zen_diff_str = "—"
+        if zen_id and zen_score is not None and current_score is not None and current_score > 0:
+            zen_pct = ((zen_score - current_score) / current_score) * 100
+            if abs(zen_pct) >= 0.5:
+                zen_diff_str = f"+{zen_pct:.0f}%" if zen_pct > 0 else f"{zen_pct:.0f}%"
+            else:
+                zen_diff_str = "≈0%"
+        zen_display = f"`{zen_id}`" if zen_id else "—"
+
+        status = classify_model_status(current, best_free, best_go)
+
+        # Compute percentage diff and trophy display
         free_score = (
             get_model_score(best_free, livebench, priority) if best_free else None
         )
-        go_score = get_model_score(best_go, livebench, priority) if best_go else None
+        go_score = (
+            get_model_score(best_go, livebench, priority) if best_go else None
+        )
 
         diff_str = ""
         if (
@@ -868,11 +1080,9 @@ def generate_workflow_audit_table(
 
         # Add trophy icon to the recommended model that is preferred
         if best_free and best_go and best_free == best_go:
-            # Free-first rule: free is preferred (both are same model)
             free_display = f"\U0001f3c6 `{best_free}`"
             go_display = "\u2014"
         elif best_go and best_free:
-            # Go is significantly better (>5% diff)
             free_display = f"`{best_free}`"
             go_display = f"\U0001f3c6 `{best_go}`{diff_str}"
         elif best_go:
@@ -891,13 +1101,14 @@ def generate_workflow_audit_table(
 
         lines.append(
             f"| `{workflow}` | `{job}` | `{step}` | `{task_type}` | "
-            f"`{current}` | {free_display} | {go_display} | {status} |"
+            f"`{current}` | {zen_display} | {zen_diff_str} | {free_display} | {go_display} | {status} |"
         )
 
     lines.append("")
     lines.append(
         "_Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). "
-        "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free)._"
+        "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free). "
+        "Zen vs Current: +X% means the best Zen model scores X% higher than the current model._"
     )
 
     return "\n".join(lines)
@@ -963,18 +1174,50 @@ def main():
     # 4. Generate recommendations & audit
     print("→ Computing recommendations...")
 
+    # All Zen models (free + paid) for benchmark scoring
+    zen_data_obj = load_json(ZEN_MODELS_PATH) if ZEN_MODELS_PATH.exists() else {}
+    all_zen_models = zen_data_obj.get("all", [])
+
     model_table = generate_model_recommendation_table(
-        task_types, free_models, go_models, livebench, threshold_pct
+        task_types, free_models, go_models, livebench, threshold_pct,
+        zen_models=all_zen_models,
     )
-    score_table = generate_score_reference_table(livebench, free_models, go_models)
+    score_table = generate_score_reference_table(
+        livebench, free_models, go_models,
+        zen_models=all_zen_models, task_types=task_types,
+    )
     audit_table = generate_workflow_audit_table(
-        scan_results, free_models, go_models, livebench, task_types, threshold_pct
+        scan_results, free_models, go_models, livebench, task_types, threshold_pct,
+        zen_models=all_zen_models,
     )
 
-    # 5. Update README
+    # 5. Generate and save benchmark data
+    print("→ Generating benchmark data...")
+    benchmark = get_benchmark_summary(
+        all_zen_models, go_models, livebench, task_types
+    )
+    benchmark_path = DATA_DIR / "benchmark_results.json"
+    save_json(
+        benchmark_path,
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "livebench_snapshot": livebench.get("_snapshot_date")
+            if isinstance(livebench, dict)
+            else None,
+            "livebench_source": livebench.get("_source")
+            if isinstance(livebench, dict)
+            else None,
+            "zen_models_count": len(all_zen_models),
+            "go_models_count": len(go_models),
+            **benchmark,
+        },
+    )
+    print(f"  ✓ Benchmark data saved to {benchmark_path}")
+
+    # 6. Update README
     update_readme(model_table, score_table, audit_table)
 
-    # 6. Save audit results for CI
+    # 7. Save audit results for CI
     audit_results = []
     for r in scan_results:
         if "error" in r:
@@ -1072,7 +1315,7 @@ def main():
         },
     )
 
-    # 7. Detect coverage issues (stale fallback, missing scores)
+    # 8. Detect coverage issues (stale fallback, missing scores)
     print("→ Checking model coverage...")
     coverage = detect_coverage_issues(free_models, go_models, livebench)
     save_json(COVERAGE_ISSUES_PATH, coverage)
