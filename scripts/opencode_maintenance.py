@@ -900,6 +900,26 @@ def generate_model_recommendation_table(
         free_model_str = f"`{best_free}`" if best_free else "—"
         go_model_str = f"`{best_go}`" if best_go else "—"
 
+        # Highlight the winner based on free-first policy
+        # Winner gets 🏆 emoji, but both columns should show their models
+        if best_free and best_go and best_free == best_go:
+            # Same model (free model wins due to free-first rule)
+            free_model_str = f"🏆 `{best_free}`"
+            go_model_str = f"`{best_go}`"
+        elif best_go and best_free:
+            # Different models - go model wins (free wasn't within threshold)
+            free_model_str = f"`{best_free}`"
+            go_model_str = f"🏆 `{best_go}`"
+        elif best_go:
+            free_model_str = "—"
+            go_model_str = f"🏆 `{best_go}`"
+        elif best_free:
+            free_model_str = f"🏆 `{best_free}`"
+            go_model_str = "—"
+        else:
+            free_model_str = "—"
+            go_model_str = "—"
+
         lines.append(
             f"| `{name}` | {desc} | {zen_model_str} | {zen_score_str} | {free_model_str} | {free_score_str} | {go_model_str} | {go_score_str} |"
         )
@@ -923,22 +943,22 @@ def generate_score_reference_table(
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
 
     # Build a reverse map: model -> list of task types it's best suited for.
-    # For each model, find the task type whose priority subscore the
-    # model scores highest on, so the "Best For" column is useful even
-    # when a model isn't the absolute #1 overall.
+    # For each model, find the top 2 task types whose priority subscore the
+    # model scores highest on, so the "Best For" column shows top 2.
     best_for_map = {}
     if task_types:
         for model_id in all_model_ids:
-            best_task = None
-            best_score = -1
+            task_scores = []
             for tt in task_types:
                 priority = tt.get("priority", "overall")
                 score = get_model_score(model_id, livebench, priority)
-                if score is not None and score > best_score:
-                    best_score = score
-                    best_task = tt["name"]
-            if best_task:
-                best_for_map.setdefault(model_id, []).append(best_task)
+                if score is not None:
+                    task_scores.append((tt["name"], score))
+            # Sort by score descending and take top 2
+            task_scores.sort(key=lambda x: x[1], reverse=True)
+            top_tasks = [t[0] for t in task_scores[:2]]
+            if top_tasks:
+                best_for_map[model_id] = top_tasks
 
     # Short labels for task types in badges
     TASK_BADGES = {
@@ -973,7 +993,7 @@ def generate_score_reference_table(
         # Best-for badges
         tasks = best_for_map.get(model_id, [])
         if tasks:
-            badges = " ".join(TASK_BADGES.get(t) or t for t in tasks)
+            badges = ", ".join(TASK_BADGES.get(t) or t for t in tasks)
             best_for_cell = badges
         else:
             best_for_cell = "—"
@@ -1004,9 +1024,9 @@ def generate_workflow_audit_table(
 ) -> str:
     """Generate the workflow audit table with status icons.
 
-    Columns: Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Zen vs Current | Recommended Free | Recommended Go | Status
-    The "Zen vs Current" column shows the percentage difference between the
-    recommended Zen model and the current model's score.
+    Columns: Workflow | Job | Step | Task Type | Current Model | Recommended Zen (+XX%) | Recommended Free | Recommended Go | Status
+    The "Recommended Zen" column shows the best Zen model with percentage
+    difference vs current model as suffix (e.g., `model (+15%)`).
     """
     if not scan_results:
         return "\n## Workflow Model Audit\n\n> No OpenCode workflows found (excluding maintenance workflow).\n"
@@ -1021,8 +1041,8 @@ def generate_workflow_audit_table(
         f"> Workflows checked: **{len(set(r['file'] for r in scan_results))}**",
         f"> OpenCode steps found: **{len(scan_results)}**",
         "",
-        "| Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Zen vs Current | Recommended Free | Recommended Go | Status |",
-        "|----------|-----|------|-----------|---------------|-----------------|----------------|------------------|----------------|--------|",
+        "| Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Recommended Free | Recommended Go | Status |",
+        "|----------|-----|------|-----------|---------------|-----------------|------------------|----------------|--------|",
     ]
 
     for r in scan_results:
@@ -1059,14 +1079,15 @@ def generate_workflow_audit_table(
             _strip_model_prefix(current), livebench, priority
         )
 
-        zen_diff_str = "—"
+        zen_display = f"`{zen_id}`" if zen_id else "—"
+        zen_suffix = ""
         if zen_id and zen_score is not None and current_score is not None and current_score > 0:
             zen_pct = ((zen_score - current_score) / current_score) * 100
             if abs(zen_pct) >= 0.5:
-                zen_diff_str = f"+{zen_pct:.0f}%" if zen_pct > 0 else f"{zen_pct:.0f}%"
+                zen_suffix = f" (+{zen_pct:.0f}%)" if zen_pct > 0 else f" ({zen_pct:.0f}%)"
             else:
-                zen_diff_str = "≈0%"
-        zen_display = f"`{zen_id}`" if zen_id else "—"
+                zen_suffix = " (≈0%)"
+        zen_display = f"{zen_display}{zen_suffix}" if zen_id else "—"
 
         status = classify_model_status(current, best_free, best_go)
 
@@ -1093,8 +1114,9 @@ def generate_workflow_audit_table(
 
         # Add trophy icon to the recommended model that is preferred
         if best_free and best_go and best_free == best_go:
+            # Same model - show in both columns with trophy on free (preferred)
             free_display = f"\U0001f3c6 `{best_free}`"
-            go_display = "\u2014"
+            go_display = f"`{best_go}`"
         elif best_go and best_free:
             free_display = f"`{best_free}`"
             go_display = f"\U0001f3c6 `{best_go}`{diff_str}"
@@ -1112,16 +1134,25 @@ def generate_workflow_audit_table(
         job = r.get("job_name", r["job_id"])
         step = r.get("step_name", f"step-{r['step_index']}")
 
+        # Recommended Zen with percentage diff suffix
+        zen_display = f"`{zen_id}`" if zen_id else "—"
+        if zen_id and zen_score is not None and current_score is not None and current_score > 0:
+            zen_pct = ((zen_score - current_score) / current_score) * 100
+            if abs(zen_pct) >= 0.5:
+                zen_display += f" (+{zen_pct:.0f}%)" if zen_pct > 0 else f" ({zen_pct:.0f}%)"
+            else:
+                zen_display += " (±0%)"
+
         lines.append(
             f"| `{workflow}` | `{job}` | `{step}` | `{task_type}` | "
-            f"`{current}` | {zen_display} | {zen_diff_str} | {free_display} | {go_display} | {status} |"
+            f"`{current}` | {zen_display} | {free_display} | {go_display} | {status} |"
         )
 
     lines.append("")
     lines.append(
         "_Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). "
-        "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free). "
-        "Zen vs Current: +X% means the best Zen model scores X% higher than the current model._"
+        "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). "
+        "Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._"
     )
 
     return "\n".join(lines)

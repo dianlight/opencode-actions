@@ -5,6 +5,11 @@ on:
     # Runs every 7 days (at 00:00 on the 1st, 8th, 15th, 22nd, and 29th of the month)
     - cron: "0 0 */7 * *"
   workflow_dispatch: # Allows manual triggering from the GitHub UI
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/opencode-maintenance.yml'
 
 # Permissions required to read files, update README.md, and manage Issues
 permissions:
