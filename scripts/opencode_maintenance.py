@@ -830,7 +830,7 @@ def generate_model_recommendation_table(
     go_models: list,
     livebench: dict,
     threshold_pct: float,
-    zen_models: list = None,
+    zen_models: Optional[list] = None,
 ) -> str:
     """Generate the task-type model recommendation table.
 
@@ -905,8 +905,8 @@ def generate_score_reference_table(
     livebench: dict,
     free_models: list,
     go_models: list,
-    zen_models: list = None,
-    task_types: list = None,
+    zen_models: Optional[list] = None,
+    task_types: Optional[list] = None,
 ) -> str:
     """Generate the detailed score reference table with source indicators.
 
@@ -914,7 +914,6 @@ def generate_score_reference_table(
     best suited for, based on its highest-scoring subscore relative to
     task-type priorities. Uses emoji badges for visual distinction.
     """
-    models = _lb_models(livebench)
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
 
     # Build a reverse map: model -> list of task types it's best suited for.
@@ -968,7 +967,7 @@ def generate_score_reference_table(
         # Best-for badges
         tasks = best_for_map.get(model_id, [])
         if tasks:
-            badges = " ".join(TASK_BADGES.get(t, t) for t in tasks)
+            badges = " ".join(TASK_BADGES.get(t) or t for t in tasks)
             best_for_cell = badges
         else:
             best_for_cell = "—"
@@ -995,7 +994,7 @@ def generate_workflow_audit_table(
     livebench: dict,
     task_types: list,
     threshold_pct: float,
-    zen_models: list = None,
+    zen_models: Optional[list] = None,
 ) -> str:
     """Generate the workflow audit table with status icons.
 
@@ -1336,8 +1335,6 @@ def main():
     if not coverage.get("stale_fallback") and not coverage.get("missing_scores"):
         print("  ✓ All models have scores, no stale fallback entries")
 
-    stale = len(coverage.get("stale_fallback", []))
-    missing = len(coverage.get("missing_scores", []))
 
     print("=" * 60)
     print("✅ Maintenance complete")
