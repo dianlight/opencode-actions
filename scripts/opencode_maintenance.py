@@ -367,6 +367,7 @@ def scan_workflows() -> list:
         return []
 
     workflow_map = load_yaml(WORKFLOW_MAP_PATH).get("workflow_task_map") or {}
+    job_task_overrides = load_yaml(WORKFLOW_MAP_PATH).get("job_task_overrides") or {}
     task_types = load_yaml(TASK_TYPES_PATH).get("task_types") or []
 
     for wf_file in sorted(
@@ -388,6 +389,8 @@ def scan_workflows() -> list:
             mapped_task = workflow_map.get(stem)
 
             for job_id, job in (wf.get("jobs") or {}).items():
+                job_override_key = f"{stem}/{job_id}"
+                job_override = job_task_overrides.get(job_override_key)
                 steps = job.get("steps") or []
                 for idx, step in enumerate(steps):
                     uses = step.get("uses") or ""
@@ -399,8 +402,10 @@ def scan_workflows() -> list:
                     agent = str(with_block.get("agent") or "")
                     prompt = str(with_block.get("prompt") or "")[:500]
 
-                    # Auto-classify if not mapped
-                    if mapped_task:
+                    # Auto-classify if not overridden
+                    if job_override:
+                        task_type = job_override
+                    elif mapped_task:
                         task_type = mapped_task
                     else:
                         task_type = classify_task_type(

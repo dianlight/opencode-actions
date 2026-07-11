@@ -13,3 +13,4 @@ workflow_task_map:
 # instead of the workflow-level default.
 job_task_overrides:
   "opencode-issue-handler/process-5": "issue-implementation"
+  "opencode-pr-comment/process-6": "code-implementation"
