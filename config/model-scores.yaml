@@ -47,3 +47,9 @@ model_scores:
     overall: 72.0
     reasoning: 80.0
     vision: 55.0
+  kimi-k2.7-code:
+    coding: 70.0
+    instruction_following: 67.0
+    overall: 68.0
+    reasoning: 76.0
+    vision: 56.0
