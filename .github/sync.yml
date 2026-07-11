@@ -1,27 +1,33 @@
-dianlight/smartmontools-sdk:
-  - .github/workflows/opencode-review.yaml
-  - .github/workflows/opencode-triage.yaml
-  - .github/workflows/opencode-triage-issue.yaml
-  - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml
-
-dianlight/hasos_more_modules:
-  - .github/workflows/opencode-review.yaml
-  - .github/workflows/opencode-triage.yaml
-  - .github/workflows/opencode-triage-issue.yaml
-  - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml
-
-dianlight/srat:
-  - .github/workflows/opencode-review.yaml
-  - .github/workflows/opencode-triage.yaml
-  - .github/workflows/opencode-triage-issue.yaml
-  - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml
-
-dianlight/hassio-addons:
-  - .github/workflows/opencode-review.yaml
-  - .github/workflows/opencode-triage.yaml
-  - .github/workflows/opencode-triage-issue.yaml
-  - .github/workflows/opencode-triage-pr.yaml
-  - .github/workflows/opencode-implement.yaml
+group:
+  repos: |
+    dianlight/smartmontools-sdk
+    dianlight/hasos_more_modules
+    dianlight/srat
+    dianlight/hassio-addons
+  files:
+    # New workflows
+    - source: .github/workflows/opencode-pr-review.yml
+      dest: .github/workflows/opencode-pr-review.yml
+    - source: .github/workflows/opencode-pr-comment.yml
+      dest: .github/workflows/opencode-pr-comment.yml
+    - source: .github/workflows/opencode-issue-handler.yml
+      dest: .github/workflows/opencode-issue-handler.yml
+    # Shared auth script
+    - source: .github/scripts/auth.sh
+      dest: .github/scripts/auth.sh
+    # Old files — synced as empty no-ops so they are harmless,
+    # but also ensures they exist in the target (prevents issues
+    # with stale triggers). Remove these entries once all targets
+    # have been manually cleaned up.
+    - source: .github/workflows/opencode.yml
+      dest: .github/workflows/opencode.yml
+    - source: .github/workflows/opencode-triage.yaml
+      dest: .github/workflows/opencode-triage.yaml
+    - source: .github/workflows/opencode-triage-pr.yaml
+      dest: .github/workflows/opencode-triage-pr.yaml
+    - source: .github/workflows/opencode-triage-issue.yaml
+      dest: .github/workflows/opencode-triage-issue.yaml
+    - source: .github/workflows/opencode-implement.yaml
+      dest: .github/workflows/opencode-implement.yaml
+    - source: .github/workflows/opencode-review.yaml
+      dest: .github/workflows/opencode-review.yaml
