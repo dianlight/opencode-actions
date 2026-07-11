@@ -938,14 +938,14 @@ def generate_score_reference_table(
 
     # Short labels for task types in badges
     TASK_BADGES = {
-        "issue-triage": "🔍Triage",
-        "issue-implementation": "🔨Impl",
-        "pr-review": "👀Review",
-        "code-implementation": "💻Code",
-        "frontend-design": "🎨Design",
-        "frontend-testing": "🧪FTest",
-        "api-testing": "🔌ATest",
-        "other": "📦Other",
+        "issue-triage": "Triage",
+        "issue-implementation": "Impl",
+        "pr-review": "Review",
+        "code-implementation": "Code",
+        "frontend-design": "Design",
+        "frontend-testing": "FTest",
+        "api-testing": "ATest",
+        "other": "Other",
     }
 
     lines = [

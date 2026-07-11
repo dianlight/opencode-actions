@@ -4,7 +4,7 @@
     "workflow_name": "opencode-issue-handler",
     "job_id": "process-4",
     "job_name": "process-4",
-    "step_index": 0,
+    "step_index": 1,
     "step_name": "Run opencode (Process 4 \u2014 Issue Review & Refinement)",
     "action_ref": "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a",
     "model": "opencode/deepseek-v4-flash-free",
