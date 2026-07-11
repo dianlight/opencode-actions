@@ -9,7 +9,7 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/opencode-maintenance.yml'
+      - '.github/workflows/opencode-maintenance.yaml'
 
 # Permissions required to read files, update README.md, and manage Issues
 permissions:
