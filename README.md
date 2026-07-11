@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-11 09:37 UTC**.
+> Last updated: **2026-07-11 09:50 UTC**.
 > LiveBench data: **121 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -58,15 +58,17 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-11 09:37 UTC**
-> Workflows checked: **4**
-> OpenCode steps found: **4**
+> Audited: **2026-07-11 09:50 UTC**
+> Workflows checked: **3**
+> OpenCode steps found: **6**
 
-| Workflow | Job | Step | Task Type | Current Model | Recommended Free | Recommended Go | Status |
-|----------|-----|------|-----------|---------------|------------------|----------------|--------|
-| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
-| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6)` | `pr-review` | `opencode/north-mini-code-free` | `north-mini-code-free` | 🏆 `glm-5.2` (+12%) | ✅ |
-| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
-| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5)` | `issue-implementation` | `opencode/north-mini-code-free` | `north-mini-code-free` | 🏆 `glm-5.2` (+12%) | ✅ |
+| Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Zen vs Current | Recommended Free | Recommended Go | Status |
+|----------|-----|------|-----------|---------------|-----------------|----------------|------------------|----------------|--------|
+| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `gemini-3.1-pro` | +15% | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
+| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-triage` | `opencode/north-mini-code-free` | `gemini-3.1-pro` | +37% | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ⚠️ |
+| `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
+| `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
+| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `pr-review` | `opencode/north-mini-code-free` | `gpt-5.5` | +63% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ⚠️ |
+| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
 
 _Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). 🏆 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). Zen vs Current: +X% means the best Zen model scores X% higher than the current model._
