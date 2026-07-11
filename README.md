@@ -4,8 +4,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Documentation
 
 - [**Workflow Flows**](.github/workflows/WORKFLOWS.md) — End-to-end diagrams and
-  descriptions of the issue and PR automation pipelines (triage → review →
-  implement).
+  descriptions of the six-process automation pipeline (review → discuss → work → task).
 
 ## Model Recommendations by Task Type
 
@@ -63,11 +62,11 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 > Workflows checked: **4**
 > OpenCode steps found: **4**
 
-| Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Zen vs Current | Recommended Free | Recommended Go | Status |
-|----------|-----|------|-----------|---------------|-----------------|----------------|------------------|----------------|--------|
-| `opencode-implement` | `implement` | `Run opencode (implementation only)` | `issue-implementation` | `opencode/north-mini-code-free` | `claude-opus-4-7` | +3% | 🏆 `north-mini-code-free` | — | ✅ |
-| `opencode-review` | `review` | `step-2` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
-| `opencode-triage-issue` | `triage` | `Run opencode (analysis & proposal only)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `gemini-3.1-pro` | +15% | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
-| `opencode-triage-pr` | `triage` | `Run opencode (analysis & proposal only)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `gemini-3.1-pro` | +15% | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
+| Workflow | Job | Step | Task Type | Current Model | Recommended Free | Recommended Go | Status |
+|----------|-----|------|-----------|---------------|------------------|----------------|--------|
+| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
+| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6)` | `pr-review` | `opencode/north-mini-code-free` | `north-mini-code-free` | 🏆 `glm-5.2` (+12%) | ✅ |
+| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
+| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5)` | `issue-implementation` | `opencode/north-mini-code-free` | `north-mini-code-free` | 🏆 `glm-5.2` (+12%) | ✅ |
 
 _Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). 🏆 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). Zen vs Current: +X% means the best Zen model scores X% higher than the current model._
