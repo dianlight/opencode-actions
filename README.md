@@ -30,31 +30,31 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 | Model | Tier | Source | Best For | Overall | Coding | Reasoning | Vision | Instruction Following |
 |-------|------|--------|----------|---------|--------|-----------|--------|----------------------|
-| `deepseek-v4-flash` | Go (Paid) | ✅ LiveBench | — | 67.7 | 57.7 | 73.1 | 46.9 | 69.4 |
-| `deepseek-v4-flash-free` | Free | ✅ LiveBench | — | 67.7 | 57.7 | 73.1 | 46.9 | 69.4 |
-| `deepseek-v4-pro` | Go (Paid) | ✅ LiveBench | — | 74.4 | 62.0 | 83.9 | 56.4 | 70.3 |
-| `glm-5` | Go (Paid) | ✅ LiveBench | — | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
-| `glm-5.1` | Go (Paid) | ✅ LiveBench | — | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
-| `glm-5.2` | Go (Paid) | ✅ LiveBench | — | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
-| `hy3-free` | Free | 📋 Fallback | — | 55.0 | 50.0 | 60.0 | 40.0 | 55.0 |
-| `hy3-preview` | Go (Paid) | 📋 Fallback | — | 55.0 | 50.0 | 60.0 | 40.0 | 55.0 |
-| `kimi-k2.5` | Go (Paid) | ✅ LiveBench | — | 69.2 | 60.1 | 76.7 | 55.0 | 65.3 |
-| `kimi-k2.6` | Go (Paid) | ✅ LiveBench | — | 72.4 | 66.4 | 77.9 | 58.1 | 69.7 |
+| `deepseek-v4-flash` | Go (Paid) | ✅ LiveBench | 👀Review | 67.7 | 57.7 | 73.1 | 46.9 | 69.4 |
+| `deepseek-v4-flash-free` | Free | ✅ LiveBench | 👀Review | 67.7 | 57.7 | 73.1 | 46.9 | 69.4 |
+| `deepseek-v4-pro` | Go (Paid) | ✅ LiveBench | 👀Review | 74.4 | 62.0 | 83.9 | 56.4 | 70.3 |
+| `glm-5` | Go (Paid) | ✅ LiveBench | 👀Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
+| `glm-5.1` | Go (Paid) | ✅ LiveBench | 👀Review | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
+| `glm-5.2` | Go (Paid) | ✅ LiveBench | 👀Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
+| `hy3-free` | Free | 📋 Fallback | 👀Review | 55.0 | 50.0 | 60.0 | 40.0 | 55.0 |
+| `hy3-preview` | Go (Paid) | 📋 Fallback | 👀Review | 55.0 | 50.0 | 60.0 | 40.0 | 55.0 |
+| `kimi-k2.5` | Go (Paid) | ✅ LiveBench | 👀Review | 69.2 | 60.1 | 76.7 | 55.0 | 65.3 |
+| `kimi-k2.6` | Go (Paid) | ✅ LiveBench | 👀Review | 72.4 | 66.4 | 77.9 | 58.1 | 69.7 |
 | `kimi-k2.7-code` | Go (Paid) | ❌ Missing | — | — | — | — | — | — |
-| `mimo-v2-omni` | Go (Paid) | 📋 Fallback | — | 60.0 | 46.0 | 66.0 | 55.0 | 58.0 |
-| `mimo-v2-pro` | Go (Paid) | ✅ LiveBench | — | 58.4 | 45.5 | 65.8 | 43.6 | 57.8 |
-| `mimo-v2.5` | Go (Paid) | 📋 Fallback | — | 62.0 | 50.0 | 68.0 | 48.0 | 60.0 |
-| `mimo-v2.5-free` | Free | 📋 Fallback | — | 60.0 | 48.0 | 66.0 | 46.0 | 59.0 |
-| `mimo-v2.5-pro` | Go (Paid) | 📋 Fallback | — | 66.0 | 55.0 | 72.0 | 52.0 | 63.0 |
-| `minimax-m2.5` | Go (Paid) | ✅ LiveBench | — | 60.3 | 59.3 | 62.3 | 31.3 | 62.2 |
-| `minimax-m2.7` | Go (Paid) | ✅ LiveBench | — | 65.0 | 52.0 | 72.4 | 34.0 | 67.4 |
-| `minimax-m3` | Go (Paid) | ✅ LiveBench | — | 70.1 | 63.3 | 76.7 | 50.2 | 66.9 |
-| `nemotron-3-ultra-free` | Free | ✅ LiveBench | — | 50.7 | 56.5 | 42.9 | 36.5 | 62.5 |
-| `north-mini-code-free` | Free | 📋 Fallback | — | 60.0 | 68.0 | 55.0 | 35.0 | 58.0 |
-| `qwen3.5-plus` | Go (Paid) | 📋 Fallback | — | 68.0 | 62.0 | 75.0 | 50.0 | 65.0 |
-| `qwen3.6-plus` | Go (Paid) | ✅ LiveBench | — | 70.8 | 64.3 | 77.0 | 52.5 | 67.7 |
-| `qwen3.7-max` | Go (Paid) | ✅ LiveBench | — | 75.2 | 60.7 | 82.4 | 58.7 | 76.6 |
-| `qwen3.7-plus` | Go (Paid) | 📋 Fallback | — | 72.0 | 62.0 | 80.0 | 55.0 | 72.0 |
+| `mimo-v2-omni` | Go (Paid) | 📋 Fallback | 👀Review | 60.0 | 46.0 | 66.0 | 55.0 | 58.0 |
+| `mimo-v2-pro` | Go (Paid) | ✅ LiveBench | 👀Review | 58.4 | 45.5 | 65.8 | 43.6 | 57.8 |
+| `mimo-v2.5` | Go (Paid) | 📋 Fallback | 👀Review | 62.0 | 50.0 | 68.0 | 48.0 | 60.0 |
+| `mimo-v2.5-free` | Free | 📋 Fallback | 👀Review | 60.0 | 48.0 | 66.0 | 46.0 | 59.0 |
+| `mimo-v2.5-pro` | Go (Paid) | 📋 Fallback | 👀Review | 66.0 | 55.0 | 72.0 | 52.0 | 63.0 |
+| `minimax-m2.5` | Go (Paid) | ✅ LiveBench | 👀Review | 60.3 | 59.3 | 62.3 | 31.3 | 62.2 |
+| `minimax-m2.7` | Go (Paid) | ✅ LiveBench | 👀Review | 65.0 | 52.0 | 72.4 | 34.0 | 67.4 |
+| `minimax-m3` | Go (Paid) | ✅ LiveBench | 👀Review | 70.1 | 63.3 | 76.7 | 50.2 | 66.9 |
+| `nemotron-3-ultra-free` | Free | ✅ LiveBench | 🔍Triage | 50.7 | 56.5 | 42.9 | 36.5 | 62.5 |
+| `north-mini-code-free` | Free | 📋 Fallback | 🔨Impl | 60.0 | 68.0 | 55.0 | 35.0 | 58.0 |
+| `qwen3.5-plus` | Go (Paid) | 📋 Fallback | 👀Review | 68.0 | 62.0 | 75.0 | 50.0 | 65.0 |
+| `qwen3.6-plus` | Go (Paid) | ✅ LiveBench | 👀Review | 70.8 | 64.3 | 77.0 | 52.5 | 67.7 |
+| `qwen3.7-max` | Go (Paid) | ✅ LiveBench | 👀Review | 75.2 | 60.7 | 82.4 | 58.7 | 76.6 |
+| `qwen3.7-plus` | Go (Paid) | 📋 Fallback | 👀Review | 72.0 | 62.0 | 80.0 | 55.0 | 72.0 |
 
 ## Workflow Model Audit
 
@@ -64,11 +64,11 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Zen vs Current | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|-----------------|----------------|------------------|----------------|--------|
-| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `gemini-3.1-pro` | +15% | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
-| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-triage` | `opencode/north-mini-code-free` | `gemini-3.1-pro` | +37% | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ⚠️ |
-| `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
-| `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
-| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `pr-review` | `opencode/north-mini-code-free` | `gpt-5.5` | +63% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ⚠️ |
-| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
+| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `gemini-3.1-pro` | +15% | `deepseek-v4-flash-free` | `qwen3.7-max` (+10%) | ✅ |
+| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-triage` | `opencode/north-mini-code-free` | `gemini-3.1-pro` | +37% | `deepseek-v4-flash-free` | `qwen3.7-max` (+10%) | ⚠️ |
+| `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | `deepseek-v4-pro` (+15%) | ✅ |
+| `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | `deepseek-v4-pro` (+15%) | ✅ |
+| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `pr-review` | `opencode/north-mini-code-free` | `gpt-5.5` | +63% | `deepseek-v4-flash-free` | `deepseek-v4-pro` (+15%) | ⚠️ |
+| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` | +22% | `deepseek-v4-flash-free` | `deepseek-v4-pro` (+15%) | ✅ |
 
-_Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). 🏆 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). Zen vs Current: +X% means the best Zen model scores X% higher than the current model._
+_Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). marks the preferred model after free-first policy (free within 5% of best Go → prefer free). Zen vs Current: +X% means the best Zen model scores X% higher than the current model._

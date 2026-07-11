@@ -911,21 +911,30 @@ def generate_score_reference_table(
 ) -> str:
     """Generate the detailed score reference table with source indicators.
 
-    Adds a "Best For" column that shows which task types a model is the
-    best Zen model for, using emoji badges for visual distinction.
+    Adds a "Best For" column that shows which task type each model is
+    best suited for, based on its highest-scoring subscore relative to
+    task-type priorities. Uses emoji badges for visual distinction.
     """
     models = _lb_models(livebench)
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
 
-    # Build a reverse map: model -> list of task types it's best Zen for
+    # Build a reverse map: model -> list of task types it's best suited for.
+    # For each model, find the task type whose priority subscore the
+    # model scores highest on, so the "Best For" column is useful even
+    # when a model isn't the absolute #1 overall.
     best_for_map = {}
-    if zen_models and task_types:
-        for tt in task_types:
-            zen_id, _, _ = get_best_zen_model_for_task(
-                tt["name"], zen_models, livebench, task_types
-            )
-            if zen_id:
-                best_for_map.setdefault(zen_id, []).append(tt["name"])
+    if task_types:
+        for model_id in all_model_ids:
+            best_task = None
+            best_score = -1
+            for tt in task_types:
+                priority = tt.get("priority", "overall")
+                score = get_model_score(model_id, livebench, priority)
+                if score is not None and score > best_score:
+                    best_score = score
+                    best_task = tt["name"]
+            if best_task:
+                best_for_map.setdefault(model_id, []).append(best_task)
 
     # Short labels for task types in badges
     TASK_BADGES = {
@@ -961,7 +970,7 @@ def generate_score_reference_table(
         tasks = best_for_map.get(model_id, [])
         if tasks:
             badges = " ".join(TASK_BADGES.get(t, t) for t in tasks)
-            best_for_cell = f"🏆 {badges}"
+            best_for_cell = badges
         else:
             best_for_cell = "—"
 
