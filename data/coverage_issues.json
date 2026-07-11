@@ -1,4 +1,9 @@
 {
   "stale_fallback": [],
-  "missing_scores": []
+  "missing_scores": [
+    {
+      "model": "kimi-k2.7-code",
+      "tier": "Go (Paid)"
+    }
+  ]
 }
