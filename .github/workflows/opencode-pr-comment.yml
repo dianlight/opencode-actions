@@ -23,7 +23,7 @@ jobs:
       github.event.comment.user.login != 'opencode-agent[bot]' &&
       github.event.comment.user.login != 'coderabbitai[bot]' &&
       github.event.comment.user.login != 'opencode-maintenance[bot]' &&
-      contains(fromJSON('['OWNER', 'MEMBER', 'COLLABORATOR']'), github.event.comment.author_association)
+      (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
