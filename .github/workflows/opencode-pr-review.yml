@@ -38,9 +38,11 @@ jobs:
 
       - name: Parse command
         id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
-          .github/scripts/auth.sh "${{ toJSON(github.event.comment.body) }}"
+          .github/scripts/auth.sh "$COMMENT_BODY"
 
       - name: Verify PR is not a draft
         id: pr-check

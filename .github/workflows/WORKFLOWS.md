@@ -31,7 +31,8 @@ flowchart TD
 
 ## Process 1 — PR Review (On-Demand Code Review Gate)
 
-**Trigger:** `/oc` or `/oc review` on a PR (issue_comment event).
+**Trigger:** Any comment starting with `/oc` on a PR (issue_comment event),
+except `/oc task` and `/oc implement` which are routed to other processes.
 
 **Constraints:**
 - PR is not a draft
@@ -183,11 +184,10 @@ with `cancel-in-progress: false` to prevent overlapping runs.
 
 ## Token Strategy
 
-- **PR Review, PR Comment, Issue Handler** all use the OpenCode GitHub
-  App token (via OIDC exchange, `use_github_token: false`) for label
-  changes and cross-workflow dispatches.
-- Process steps that only need read access or simple `gh` CLI
-  operations use the built-in `GITHUB_TOKEN`.
+- All OpenCode process steps use `use_github_token: true` (the built-in
+  `GITHUB_TOKEN`) for `gh` CLI operations, commits, and pushes.
+- The `GITHUB_TOKEN` is sufficient for all current operations: posting
+  reviews, comments, pushing branches, and creating PRs.
 
 ## Optimizations
 

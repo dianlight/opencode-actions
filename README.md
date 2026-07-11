@@ -59,8 +59,8 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Workflow Model Audit
 
 > Audited: **2026-07-08 00:35 UTC**
-> Workflows checked: **3**
-> OpenCode steps found: **5**
+> Workflows checked: **4**
+> OpenCode steps found: **4**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|------------------|----------------|--------|

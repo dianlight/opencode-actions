@@ -34,7 +34,7 @@ if [[ "$TRIMMED" =~ ^/oc ]]; then
     TASK_ARGS="${BASH_REMATCH[1]}"
   elif [[ "$TRIMMED" =~ ^/oc[[:space:]]+task[[:space:]]*$ ]]; then
     SUBCOMMAND="task"
-  elif [[ "$TRIMMED" =~ ^/oc[[:space:]]+review ]]; then
+  elif [[ "$TRIMMED" =~ ^/oc[[:space:]]+review($|[[:space:]]) ]]; then
     SUBCOMMAND="review"
   elif [[ "$TRIMMED" =~ ^/oc[[:space:]]*$ ]] || [[ "$TRIMMED" =~ ^/oc$ ]]; then
     SUBCOMMAND="discuss"

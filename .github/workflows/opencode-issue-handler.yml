@@ -29,6 +29,7 @@ jobs:
       issues: write
     outputs:
       process: ${{ steps.route.outputs.process }}
+      task_args: ${{ steps.parse.outputs.TASK_ARGS }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -37,9 +38,11 @@ jobs:
 
       - name: Parse command
         id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
-          .github/scripts/auth.sh "${{ toJSON(github.event.comment.body) }}"
+          .github/scripts/auth.sh "$COMMENT_BODY"
 
       - name: Route to process
         id: route
@@ -57,6 +60,7 @@ jobs:
     if: needs.route.outputs.process == 'process-4'
     needs: route
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       id-token: write
       contents: read
@@ -146,19 +150,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Parse task arguments
-        id: parse
-        run: |
-          chmod +x .github/scripts/auth.sh 2>/dev/null || true
-          .github/scripts/auth.sh "${{ toJSON(github.event.comment.body) }}"
-
       - name: Run opencode (Process 5 — Issue Work & PR Creation)
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
-          OPENCODE_IMPLEMENT_ARGS: ${{ steps.parse.outputs.TASK_ARGS }}
+          OPENCODE_IMPLEMENT_ARGS: ${{ needs.route.outputs.task_args }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
           model: opencode/north-mini-code-free
           use_github_token: true
@@ -196,7 +196,7 @@ jobs:
 
             ### 1. Gather requirements
             ```bash
-            gh issue view ${{ github.event.issue.number }} --json body,title,comments
+            gh issue view "$ISSUE_NUMBER" --json body,title,comments
             ```
 
             ### 2. Determine the default branch
@@ -207,13 +207,13 @@ jobs:
             ### 3. Create a feature branch
             Sanitize the issue title to create a slug:
             ```bash
-            SLUG=$(echo "${{ github.event.issue.title }}" | \
+            SLUG=$(echo "$ISSUE_TITLE" | \
               tr '[:upper:]' '[:lower:]' | \
               sed 's/[^a-z0-9]/-/g' | \
               sed 's/--*/-/g' | \
               sed 's/^-//;s/-$//' | \
               cut -c1-40)
-            BRANCH="opencode/issue-${{ github.event.issue.number }}-${SLUG}"
+            BRANCH="opencode/issue-${ISSUE_NUMBER}-${SLUG}"
             git checkout -b "$BRANCH" "origin/$DEFAULT_BRANCH"
             ```
 
@@ -263,14 +263,14 @@ jobs:
             gh pr create \
               --base "$DEFAULT_BRANCH" \
               --head "$BRANCH" \
-              --title "feat: ${{ github.event.issue.title }}" \
+              --title "feat: $ISSUE_TITLE" \
               --body-file /tmp/pr_body.md
             ```
 
             ### 8. Link back to the issue
             Post a comment on the issue:
             ```bash
-            gh issue comment ${{ github.event.issue.number }} \
+            gh issue comment "$ISSUE_NUMBER" \
               --body "🚀 Implementation PR created: #<pr_number>\n\nBranch: \`$BRANCH\`"
             ```
 

@@ -18,11 +18,12 @@ concurrency:
 jobs:
   route:
     if: >-
+      (github.event_name != 'issue_comment' || github.event.issue.pull_request) &&
       github.event.comment.user.login != 'github-actions[bot]' &&
       github.event.comment.user.login != 'opencode-agent[bot]' &&
       github.event.comment.user.login != 'coderabbitai[bot]' &&
       github.event.comment.user.login != 'opencode-maintenance[bot]' &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      contains(fromJSON('['OWNER', 'MEMBER', 'COLLABORATOR']'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -39,9 +40,11 @@ jobs:
 
       - name: Parse command
         id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
-          .github/scripts/auth.sh "${{ toJSON(github.event.comment.body) }}"
+          .github/scripts/auth.sh "$COMMENT_BODY"
 
       - name: Determine process
         id: route
@@ -81,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: read
+      contents: write
       pull-requests: write
     steps:
       - name: Check if this is a reply to an Opencode thread
@@ -112,11 +115,13 @@ jobs:
             fi
           elif [[ "$EVENT_NAME" == "issue_comment" ]]; then
             # Check if the most recent comment before this one was from the bot
-            LAST_BOT_COMMENT=$(gh api \
+            # Check if the comment immediately before this one was from the bot
+            LAST_COMMENT_AUTHOR=$(gh api \
               "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-              --jq '[.[] | select(.user.login == "opencode-agent[bot]")] | length' 2>/dev/null || echo "0")
+              --jq '.[-2].user.login' 2>/dev/null || echo "")
 
-            if [[ "$LAST_BOT_COMMENT" -gt 0 ]]; then
+            if [[ "$LAST_COMMENT_AUTHOR" == "opencode-agent[bot]" ]] || \
+               [[ "$LAST_COMMENT_AUTHOR" == "github-actions[bot]" ]]; then
               IS_BOT_THREAD="true"
             fi
           fi
@@ -253,9 +258,11 @@ jobs:
 
       - name: Parse task arguments
         id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
-          .github/scripts/auth.sh "${{ toJSON(github.event.comment.body) }}"
+          .github/scripts/auth.sh "$COMMENT_BODY"
 
       - name: Run opencode (Process 6 — PR Task Execution)
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
