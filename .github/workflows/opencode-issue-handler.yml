@@ -73,6 +73,7 @@ jobs:
 
       - name: Run opencode (Process 4 — Issue Review & Refinement)
         id: opencode
+        continue-on-error: true
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -164,6 +165,10 @@ jobs:
             "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
             -f content='-1' 2>/dev/null || true
 
+      - name: Propagate failure
+        if: steps.opencode.outcome == 'failure'
+        run: exit 1
+
   process-5:
     if: needs.route.outputs.process == 'process-5'
     needs: route
@@ -185,6 +190,7 @@ jobs:
 
       - name: Run opencode (Process 5 — Issue Work & PR Creation)
         id: opencode
+        continue-on-error: true
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
@@ -340,3 +346,7 @@ jobs:
           gh api --method POST \
             "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
             -f content='-1' 2>/dev/null || true
+
+      - name: Propagate failure
+        if: steps.opencode.outcome == 'failure'
+        run: exit 1
