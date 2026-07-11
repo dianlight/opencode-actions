@@ -177,8 +177,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
 
       - name: Run opencode (Process 5 — Issue Work & PR Creation)
         id: opencode

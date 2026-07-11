@@ -12,10 +12,9 @@ OpenCode Maintenance Script
 import csv
 import io
 import json
-import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 from urllib.error import HTTPError, URLError
@@ -846,7 +845,7 @@ def generate_model_recommendation_table(
     header_lines = [
         "## Model Recommendations by Task Type",
         "",
-        f"> Automatically updated by `opencode-maintenance` workflow.",
+        "> Automatically updated by `opencode-maintenance` workflow.",
         f"> Last updated: **{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}**.",
         f"> LiveBench data: **{len(models)} models scored**.",
     ]
