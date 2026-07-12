@@ -2,6 +2,48 @@
 # Maps workflow/job/step patterns to task types
 
 task_types:
+  # Standard OpenCode task types
+  - name: "Plan"
+    description: "Planning, architecture decisions, task decomposition"
+    signals:
+      - "plan"
+      - "architecture"
+      - "design"
+      - "breakdown"
+      - "decompose"
+      - "strategy"
+      - "roadmap"
+    relevant_subscores: ["reasoning", "instruction_following"]
+    priority: "reasoning"
+
+  - name: "Ask"
+    description: "General Q&A, explanations, analysis"
+    signals:
+      - "ask"
+      - "question"
+      - "explain"
+      - "how to"
+      - "what is"
+      - "why"
+      - "help"
+      - "clarify"
+    relevant_subscores: ["instruction_following", "reasoning"]
+    priority: "instruction_following"
+
+  - name: "Code"
+    description: "Code generation, implementation, refactoring"
+    signals:
+      - "code"
+      - "implement"
+      - "write code"
+      - "generate code"
+      - "refactor"
+      - "bug fix"
+      - "feature"
+    relevant_subscores: ["coding"]
+    priority: "coding"
+
+  # GitHub workflow-specific task types
   - name: "issue-triage"
     description: "Triage, label, categorize, route issues"
     signals:

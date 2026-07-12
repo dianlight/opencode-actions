@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-11T17:42:40.546996+00:00",
+  "timestamp": "2026-07-12T14:20:37.274434+00:00",
   "livebench_snapshot": "2026_01_08",
   "livebench_source": "https://livebench.ai/table_2026_01_08.csv",
   "livebench_models": 121,
@@ -28,11 +28,11 @@
       "step": "Run opencode (Process 5 \u2014 Issue Work & PR Creation)",
       "task_type": "issue-implementation",
       "current_model": "opencode/north-mini-code-free",
-      "recommended_free": "north-mini-code-free",
-      "recommended_go": "north-mini-code-free",
-      "preferred_tier": "free",
-      "preferred_diff": null,
-      "status": "\u2705"
+      "recommended_free": "deepseek-v4-flash-free",
+      "recommended_go": "kimi-k2.6",
+      "preferred_tier": "go",
+      "preferred_diff": 15,
+      "status": "\u26a0\ufe0f"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -67,11 +67,11 @@
       "step": "Run opencode (Process 6 \u2014 PR Task Execution)",
       "task_type": "code-implementation",
       "current_model": "opencode/north-mini-code-free",
-      "recommended_free": "north-mini-code-free",
-      "recommended_go": "north-mini-code-free",
-      "preferred_tier": "free",
-      "preferred_diff": null,
-      "status": "\u2705"
+      "recommended_free": "deepseek-v4-flash-free",
+      "recommended_go": "kimi-k2.6",
+      "preferred_tier": "go",
+      "preferred_diff": 15,
+      "status": "\u26a0\ufe0f"
     },
     {
       "file": ".github/workflows/opencode-pr-review.yml",

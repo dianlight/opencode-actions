@@ -560,6 +560,11 @@ def get_best_models_for_task(
 
     # Fallback to config defaults if no scores
     defaults = {
+        # Standard OpenCode task types
+        "Plan": ("mimo-v2.5-free", "mimo-v2.5-pro"),
+        "Ask": ("hy3-free", "hy3-preview"),
+        "Code": ("north-mini-code-free", "kimi-k2.7-code"),
+        # GitHub workflow-specific task types
         "issue-triage": ("deepseek-v4-flash-free", "deepseek-v4-flash"),
         "issue-implementation": ("north-mini-code-free", "kimi-k2.7-code"),
         "pr-review": ("nemotron-3-ultra-free", "deepseek-v4-pro"),
