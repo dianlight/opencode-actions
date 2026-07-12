@@ -1,55 +1,55 @@
 model_scores:
   hy3-preview:
-    coding: 50.0
-    instruction_following: 55.0
-    overall: 55.0
-    reasoning: 60.0
-    vision: 40.0
-  mimo-v2-omni:
-    coding: 46.0
+    coding: 55.0
     instruction_following: 58.0
-    overall: 60.0
-    reasoning: 66.0
+    overall: 54.0
+    reasoning: 60.0
+    vision: 8.0    # text-only, no vision encoder
+  mimo-v2-omni:
+    coding: 42.0
+    instruction_following: 50.0
+    overall: 50.0
+    reasoning: 48.0
     vision: 55.0
   mimo-v2.5:
-    coding: 50.0
-    instruction_following: 60.0
-    overall: 62.0
-    reasoning: 68.0
-    vision: 48.0
-  mimo-v2.5-free:
-    coding: 48.0
-    instruction_following: 59.0
-    overall: 60.0
-    reasoning: 66.0
-    vision: 46.0
-  mimo-v2.5-pro:
-    coding: 55.0
-    instruction_following: 63.0
-    overall: 66.0
-    reasoning: 72.0
-    vision: 52.0
-  north-mini-code-free:
-    coding: 68.0
-    instruction_following: 58.0
-    overall: 60.0
-    reasoning: 55.0
-    vision: 35.0
-  qwen3.5-plus:
-    coding: 62.0
+    coding: 60.0
     instruction_following: 65.0
+    overall: 62.0
+    reasoning: 64.0
+    vision: 58.0
+  mimo-v2.5-free:
+    coding: 56.0
+    instruction_following: 62.0
+    overall: 58.0
+    reasoning: 60.0
+    vision: 54.0
+  mimo-v2.5-pro:
+    coding: 66.0
+    instruction_following: 74.0
     overall: 68.0
-    reasoning: 75.0
-    vision: 50.0
+    reasoning: 70.0
+    vision: 55.0
+  north-mini-code-free:
+    coding: 35.0        # AA Coding Index 33.4
+    instruction_following: 40.0
+    overall: 32.0
+    reasoning: 38.0
+    vision: 5.0          # confirmed no image input support
+  qwen3.5-plus:
+    coding: 52.0
+    instruction_following: 60.0
+    overall: 58.0
+    reasoning: 62.0
+    vision: 42.0
   qwen3.7-plus:
     coding: 62.0
     instruction_following: 72.0
-    overall: 72.0
-    reasoning: 80.0
-    vision: 55.0
+    overall: 66.0
+    reasoning: 72.0
+    vision: 62.0
   kimi-k2.7-code:
-    coding: 70.0
-    instruction_following: 67.0
-    overall: 68.0
-    reasoning: 76.0
-    vision: 56.0
+    coding: 61.0
+    instruction_following: 58.0
+    overall: 58.0
+    reasoning: 55.0
+    vision: 48.0

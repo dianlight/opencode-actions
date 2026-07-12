@@ -1,0 +1,29 @@
+name: Lint YAML
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+      - ".yamllint"
+      - "config/**/*.yaml"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".yamllint"
+      - "config/**/*.yaml"
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint YAML files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install mise
+        uses: jdx/mise-action@v2
+
+      - name: Run yamllint
+        run: mise run lint-yaml
