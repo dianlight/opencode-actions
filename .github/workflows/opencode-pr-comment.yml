@@ -539,7 +539,7 @@ jobs:
 
             ## Context
             - Repository: ${{ github.repository }}
-            - Pull request: #${{ github.event.pull_request.number }}
+            - Pull request: #${{ github.event.issue.number }}
             - Task arguments from the user: env var `OPENCODE_TASK_ARGS`
 
             ## Workflow
@@ -553,7 +553,7 @@ jobs:
 
             ### 2. Checkout the PR branch
             ```bash
-            gh pr checkout ${{ github.event.pull_request.number }}
+            gh pr checkout ${{ github.event.issue.number }}
             ```
 
             ### 3. Implement the task
@@ -582,7 +582,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TASK_ARGS: ${{ steps.parse.outputs.TASK_ARGS }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           chmod +x .github/scripts/pr-tasks.sh 2>/dev/null || true
           NEEDLE="${TASK_ARGS:-}"
@@ -624,7 +624,7 @@ jobs:
 
             ## Context
             - Repository: ${{ github.repository }}
-            - Pull request: #${{ github.event.pull_request.number }}
+            - Pull request: #${{ github.event.issue.number }}
             - Task arguments from the user: env var `OPENCODE_TASK_ARGS`
 
             ## Workflow
@@ -638,7 +638,7 @@ jobs:
 
             ### 2. Checkout the PR branch
             ```bash
-            gh pr checkout ${{ github.event.pull_request.number }}
+            gh pr checkout ${{ github.event.issue.number }}
             ```
 
             ### 3. Implement the task
@@ -667,7 +667,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TASK_ARGS: ${{ steps.parse.outputs.TASK_ARGS }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           chmod +x .github/scripts/pr-tasks.sh 2>/dev/null || true
           NEEDLE="${TASK_ARGS:-}"

@@ -92,24 +92,21 @@ runs:
           --jq '.issue_url | split("/") | last' 2>/dev/null || echo "")
 
         if [[ -n "$ISSUE_NUMBER" ]]; then
-          CREATED=$(gh issue comment "$ISSUE_NUMBER" \
+          STATUS_ID=$(gh issue comment "$ISSUE_NUMBER" \
             --repo "$REPO" \
-            --body "$BODY" 2>/dev/null || echo "")
+            --body "$BODY" \
+            --json id -q .id 2>/dev/null || echo "")
         else
           # Fallback: determine PR number from the pull review comment
           PR_NUMBER=$(gh api "/repos/${REPO}/pulls/comments/${COMMENT_ID}" \
             --jq '.pull_request_url | split("/") | last' 2>/dev/null || echo "")
           if [[ -n "$PR_NUMBER" ]]; then
-            CREATED=$(gh pr comment "$PR_NUMBER" \
+            STATUS_ID=$(gh pr comment "$PR_NUMBER" \
               --repo "$REPO" \
-              --body "$BODY" 2>/dev/null || echo "")
+              --body "$BODY" \
+              --json id -q .id 2>/dev/null || echo "")
           fi
         fi
-
-        # Extract the new comment ID for later edits (from gh output URL or API)
-        STATUS_ID=$(gh api "/repos/${REPO}/issues/comments" \
-          --jq "[.[] | select(.body | startswith(\"<!-- opencode-status-marker: ${COMMENT_ID} -->\"))] | last | .id" \
-          2>/dev/null || echo "")
 
         echo "comment_id=${STATUS_ID}" >> "$GITHUB_OUTPUT"
 
@@ -125,11 +122,8 @@ runs:
         COMMENT_ID: ${{ inputs.comment-id }}
         REPO: ${{ inputs.repository }}
         LABEL: ${{ inputs.process-label }}
+        STATUS_ID: ${{ steps.ack-status.outputs.comment_id }}
       run: |
-        # Find the existing status comment by its marker
-        STATUS_ID=$(gh api "/repos/${REPO}/issues/comments" \
-          --jq "[.[] | select(.body | startswith(\"<!-- opencode-status-marker: ${COMMENT_ID} -->\"))] | last | .id" \
-          2>/dev/null || echo "")
         if [[ -z "$STATUS_ID" || "$STATUS_ID" == "null" ]]; then
           echo "::warning::opencode-run: could not find status comment to update (running)"
           exit 0
@@ -152,6 +146,7 @@ runs:
         COMMENT_ID: ${{ inputs.comment-id }}
         REPO: ${{ inputs.repository }}
         LABEL: ${{ inputs.process-label }}
+        STATUS_ID: ${{ steps.ack-status.outputs.comment_id }}
       run: |
         # React 🎉 (hooray) on the trigger comment
         gh api --method POST \
@@ -162,9 +157,6 @@ runs:
           -f content='hooray' 2>/dev/null || true
 
         # Flip status comment to done
-        STATUS_ID=$(gh api "/repos/${REPO}/issues/comments" \
-          --jq "[.[] | select(.body | startswith(\"<!-- opencode-status-marker: ${COMMENT_ID} -->\"))] | last | .id" \
-          2>/dev/null || echo "")
         if [[ -n "$STATUS_ID" && "$STATUS_ID" != "null" ]]; then
           BODY="<!-- opencode-status-marker: ${COMMENT_ID} -->
         **${LABEL}** — ✅ Done ([view run](${RUN_URL}))"
@@ -185,6 +177,7 @@ runs:
         COMMENT_ID: ${{ inputs.comment-id }}
         REPO: ${{ inputs.repository }}
         LABEL: ${{ inputs.process-label }}
+        STATUS_ID: ${{ steps.ack-status.outputs.comment_id }}
       run: |
         # React 👎 on the trigger comment
         gh api --method POST \
@@ -195,9 +188,6 @@ runs:
           -f content='-1' 2>/dev/null || true
 
         # Flip status comment to failed (with run link for diagnosis)
-        STATUS_ID=$(gh api "/repos/${REPO}/issues/comments" \
-          --jq "[.[] | select(.body | startswith(\"<!-- opencode-status-marker: ${COMMENT_ID} -->\"))] | last | .id" \
-          2>/dev/null || echo "")
         if [[ -n "$STATUS_ID" && "$STATUS_ID" != "null" ]]; then
           BODY="<!-- opencode-status-marker: ${COMMENT_ID} -->
         **${LABEL}** — ❌ Failed — [check the run log](${RUN_URL}) for details"

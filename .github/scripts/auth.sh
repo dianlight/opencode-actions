@@ -16,7 +16,7 @@ set -euo pipefail
 #   FLAG_DRAFT=true|false          (from --draft)
 #   FLAG_NO_CHANGELOG=true|false   (from --no-changelog)
 #
-# Flags may appear anywhere after the subcommand. Recognized flags are
+# Flags may appear on the first line after the subcommand. Recognized flags are
 # stripped from TASK_ARGS so the AI receives clean task text. Unknown
 # --flags are left in place and reported via a ::warning:: annotation.
 # ─────────────────────────────────────────────────────────────────────

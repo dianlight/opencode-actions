@@ -462,6 +462,7 @@ jobs:
         if: >-
           steps.opencode.outcome == 'success' &&
           needs.route.outputs.flag_no_changelog != 'true'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -623,6 +624,7 @@ jobs:
         if: >-
           steps.opencode2.outcome == 'success' &&
           needs.route.outputs.flag_no_changelog != 'true'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
