@@ -225,9 +225,9 @@ jobs:
               else:
                   icon = r.get('status', '❓')
                   print(
-                      f'- {icon} \`{r["workflow"]}\` / \`{r["job"]}\` / \`{r["step"]}\` '
-                      f'— current: \`{r["current_model"]}\`, '
-                      f'suggested free: \`{r["recommended_free"]}\`'
+                      f'- {icon} \`{r[\"workflow\"]}\` / \`{r[\"job\"]}\` / \`{r[\"step\"]}\` '
+                      f'— current: \`{r[\"current_model\"]}\`, '
+                      f'suggested free: \`{r[\"recommended_free\"]}\`'
                   )
           " >> $GITHUB_STEP_SUMMARY
           else
