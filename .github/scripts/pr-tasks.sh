@@ -58,7 +58,9 @@ if [[ "$SUBCMD" == "check-task" ]]; then
 
   # Find the first uncompleted task that matches the needle
   if [[ -n "$NEEDLE" ]]; then
-    MATCH=$(echo "$PR_BODY" | grep -m1 "^- \[ \].*${NEEDLE}" || true)
+    MATCH=$(printf '%s\n' "$PR_BODY" \
+      | grep '^- \[ \]' \
+      | grep -F -m1 -- "$NEEDLE" || true)
   else
     MATCH=$(echo "$PR_BODY" | grep -m1 '^- \[ \]' || true)
   fi
