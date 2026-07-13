@@ -6,7 +6,7 @@ This repo distributes GitHub Actions workflows to multiple downstream repositori
 
 ## Active vs deprecated workflows
 
-- **Active (3 files):** `opencode-pr-review.yml`, `opencode-pr-comment.yml`, `opencode-issue-handler.yml`. These implement the 6-process automation pipeline.
+- **Active (4 files):** `opencode-pr-review.yml`, `opencode-pr-comment.yml`, `opencode-issue-handler.yml`, `opencode-labels.yml`. The first three implement the 6-process automation pipeline; `opencode-labels.yml` is the event-driven label manager.
 - **Deprecated (6 files):** `opencode.yml`, `opencode-triage*.yaml`, `opencode-implement.yaml`, `opencode-review.yaml`. These are **no-op stubs** synced to downstream repos to prevent stale triggers. Do not add real logic to them.
 - Do not add new workflow files without also adding them to `.github/sync.yml`.
 
@@ -61,14 +61,45 @@ Unknown `--flags` are left in `TASK_ARGS` and reported via `::warning::`.
 ### Shared composite action
 
 `.github/actions/opencode-run/action.yml` owns the per-job lifecycle:
-- **`do-ack: true`** — immediately post 👀 (`eyes`) on the trigger comment and create a
-  sticky "running" status comment linking to the Actions run
-- **`do-success: true`** — post 🎉 (`hooray`) and flip the status comment to "✅ Done"
-- **`do-failure: true`** — post 👎 (`-1`) and flip the status comment to "❌ Failed"
+- **`do-ack: true`** — post 👀 (`eyes`) on the trigger comment, create a sticky
+  "running" status comment, **and add GitHub labels** (`add-labels` input)
+- **`do-success: true`** — post 🎉 (`hooray`), flip status comment to "✅ Done",
+  **and remove labels** (`remove-labels` input)
+- **`do-failure: true`** — post 👎 (`-1`), flip status comment to "❌ Failed",
+  **and remove labels** (`remove-labels` input)
+
+Label inputs (all optional — labels are created on demand with color `0075ca`):
+- `issue-number` — issue or PR number for label operations
+- `is-pull-request` — `'true'` to use the PR labels endpoint
+- `add-labels` — space-separated labels to add at ack time
+- `remove-labels` — space-separated labels to remove at success/failure
 
 All workflows call this action by local path `uses: ./.github/actions/opencode-run`
 **not** by `owner/repo@sha`. The action and `pr-tasks.sh` are both registered in
 `.github/sync.yml` so downstream repos receive them automatically.
+
+### Label-automation workflow (`opencode-labels.yml`)
+
+Three event-driven jobs (no AI invoked):
+
+| Job | Trigger | What it does |
+|-----|---------|-------------|
+| `inject-help-menu` | `issues/pull_request: labeled` where label = `ai:help` | Appends a checkboxes help menu to the body (idempotent) |
+| `checkbox-proxy` | `issues/pull_request: edited` (body changed) | Authorized users checking a box in the menu get it proxied as `/oc comment` via `GH_PAT`; requires write permission on the repo |
+| `clear-user-request-label` | `issue_comment: created` (authorized user) | Removes `ai:user_request` label when a human responds |
+
+**Label lifecycle:**
+
+| Label | Added by | Removed by |
+|-------|----------|------------|
+| `ai:working` | Composite action ack | Composite action success/failure |
+| `ai:pr-review` | P1 ack | P1 success/failure |
+| `ai:pr-comment` | P2/P3 ack | P2/P3 success/failure |
+| `ai:pr-task` | P6 ack | P6 success/failure |
+| `ai:issue-review` | P4 ack | P4 success/failure |
+| `ai:issue-implement` | P5 ack | P5 success/failure |
+| `ai:help` | Human | Not removed by bot (human removes when done) |
+| `ai:user_request` | AI prompt instruction | `clear-user-request-label` job |
 
 ### Sync system
 

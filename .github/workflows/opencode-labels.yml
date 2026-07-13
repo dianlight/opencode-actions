@@ -1,0 +1,267 @@
+name: opencode-labels
+
+# Event-driven label manager for OpenCode AI workflows.
+#
+# Job 1 — inject-help-menu:
+#   When a user adds the 'ai:help' label to an issue or PR, append a
+#   contextual help menu (checkboxes) to the body.
+#
+# Job 2 — checkbox-proxy:
+#   When an authorized user checks a box in the help menu, translate
+#   the checked item into an /oc comment (using GH_PAT). Requires
+#   GH_PAT to be configured — silently skips if absent.
+#
+# Job 3 — clear-user-request-label:
+#   When an authorized user comments on an issue or PR that carries
+#   the 'ai:user_request' label, remove that label.
+
+on:
+  issues:
+    types: [labeled, edited]
+  pull_request:
+    types: [labeled, edited]
+  issue_comment:
+    types: [created]
+
+jobs:
+
+  # ── Job 1: inject-help-menu ────────────────────────────────────────
+  # Appends the AI help menu to the issue/PR body when the ai:help
+  # label is added. Idempotent: skips if the marker is already present.
+  # ──────────────────────────────────────────────────────────────────
+  inject-help-menu:
+    if: >-
+      (github.event_name == 'issues' || github.event_name == 'pull_request') &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'ai:help'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Inject AI help menu
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          # Read current body
+          if [[ "$IS_PR" == "true" ]]; then
+            CURRENT_BODY=$(gh pr view "$ISSUE_NUMBER" --repo "$REPO" --json body -q .body)
+          else
+            CURRENT_BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body -q .body)
+          fi
+
+          # Idempotency check — skip if menu already present
+          if echo "$CURRENT_BODY" | grep -q '<!-- opencode-help-menu -->'; then
+            echo "::notice::Help menu already present — skipping"
+            exit 0
+          fi
+
+          # Build context-appropriate help menu.
+          # Stored in a temp file to avoid YAML syntax conflicts with here-docs.
+          MENU_FILE=$(mktemp)
+          if [[ "$IS_PR" == "true" ]]; then
+            printf '\n\n<!-- opencode-help-menu -->\n' > "$MENU_FILE"
+            printf '### 🤖 OpenCode AI Actions\n' >> "$MENU_FILE"
+            printf 'Check a box to trigger the AI (write access required):\n' >> "$MENU_FILE"
+            printf '- [ ] 🔍 ai review — run a full code review on this PR\n' >> "$MENU_FILE"
+            printf '- [ ] ✅ ai task — execute the next unchecked task in this PR\n' >> "$MENU_FILE"
+          else
+            printf '\n\n<!-- opencode-help-menu -->\n' > "$MENU_FILE"
+            printf '### 🤖 OpenCode AI Actions\n' >> "$MENU_FILE"
+            printf 'Check a box to trigger the AI (write access required):\n' >> "$MENU_FILE"
+            printf '- [ ] 🔍 ai review — analyze and refine this issue\n' >> "$MENU_FILE"
+            printf '- [ ] 🔨 ai implement — start implementation of this issue\n' >> "$MENU_FILE"
+          fi
+          MENU=$(cat "$MENU_FILE")
+          rm -f "$MENU_FILE"
+
+          # Append menu to body
+          NEW_BODY="${CURRENT_BODY}${MENU}"
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" --body "$NEW_BODY"
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --body "$NEW_BODY"
+          fi
+          echo "::notice::AI help menu appended to #${ISSUE_NUMBER}"
+        shell: bash
+
+  # ── Job 2: checkbox-proxy ─────────────────────────────────────────
+  # When an authorized user checks a box in the help menu, post the
+  # corresponding /oc comment (using GH_PAT so it passes the existing
+  # auth gate). Requires GH_PAT — silently skips if not configured.
+  # Flips the checkbox back to - [ ] after proxying (so it resets).
+  # ──────────────────────────────────────────────────────────────────
+  checkbox-proxy:
+    if: >-
+      (github.event_name == 'issues' || github.event_name == 'pull_request') &&
+      github.event.action == 'edited' &&
+      github.event.changes.body != null
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Check for GH_PAT
+        id: pat-check
+        env:
+          PAT: ${{ secrets.GH_PAT }}
+        run: |
+          if [[ -z "$PAT" ]]; then
+            echo "::notice::GH_PAT not configured — skipping checkbox proxy"
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Authorize sender
+        id: authz
+        if: steps.pat-check.outputs.has_pat == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          REPO: ${{ github.repository }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          # Live permission check — stronger than author_association
+          PERM=$(gh api "/repos/${REPO}/collaborators/${SENDER}/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          echo "permission=$PERM" >> "$GITHUB_OUTPUT"
+          if [[ "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sender ${SENDER} has permission '${PERM}' — authorized"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sender ${SENDER} has permission '${PERM}' — not authorized; skipping"
+          fi
+        shell: bash
+
+      - name: Detect checked box and proxy command
+        if: >-
+          steps.pat-check.outputs.has_pat == 'true' &&
+          steps.authz.outputs.authorized == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          REPO: ${{ github.repository }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          BODY_FROM: ${{ github.event.changes.body.from }}
+          BODY_NOW: ${{ github.event.issue.body || github.event.pull_request.body }}
+        run: |
+          # Find lines that changed from - [ ] to - [x] inside the help menu block
+          # Strategy: extract the help-menu block from both versions and diff
+          extract_menu() {
+            echo "$1" | awk '/<!-- opencode-help-menu -->/,/^---$/' | tail -n +2
+          }
+
+          MENU_BEFORE=$(extract_menu "$BODY_FROM")
+          MENU_NOW=$(extract_menu "$BODY_NOW")
+
+          # Find which label was newly checked (was - [ ], is now - [x])
+          CHECKED_ITEM=""
+          while IFS= read -r LINE_NOW; do
+            if [[ "$LINE_NOW" =~ ^-\ \[x\]\ (.+) ]]; then
+              LABEL="${BASH_REMATCH[1]}"
+              # Was it unchecked before?
+              UNCHECKED="- [ ] ${LABEL}"
+              if echo "$MENU_BEFORE" | grep -qF "$UNCHECKED"; then
+                CHECKED_ITEM="$LABEL"
+                break
+              fi
+            fi
+          done <<< "$MENU_NOW"
+
+          if [[ -z "$CHECKED_ITEM" ]]; then
+            echo "::notice::No help-menu checkbox was newly checked — nothing to proxy"
+            exit 0
+          fi
+
+          echo "::notice::Detected newly checked item: '$CHECKED_ITEM'"
+
+          # Map checked label to /oc command
+          OC_CMD=""
+          case "$CHECKED_ITEM" in
+            *"ai review"*)     OC_CMD="/oc review" ;;
+            *"ai implement"*)  OC_CMD="/oc implement" ;;
+            *"ai task"*)       OC_CMD="/oc task" ;;
+            *)
+              echo "::warning::Unknown checked item '$CHECKED_ITEM' — no /oc command mapped"
+              exit 0
+              ;;
+          esac
+
+          echo "::notice::Proxying command: $OC_CMD"
+
+          # Reset the checkbox back to - [ ] so the menu can be reused
+          RESET_LABEL="${CHECKED_ITEM}"
+          RESET_BODY=$(echo "$BODY_NOW" | sed "s/- \[x\] ${RESET_LABEL}/- \[ \] ${RESET_LABEL}/")
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" --body "$RESET_BODY" 2>/dev/null || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --body "$RESET_BODY" 2>/dev/null || true
+          fi
+
+          # Post the /oc command as a comment (via GH_PAT — appears as a human)
+          if [[ "$IS_PR" == "true" ]]; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+              --body "${OC_CMD}"
+          else
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+              --body "${OC_CMD}"
+          fi
+
+          echo "::notice::Posted '$OC_CMD' on #${ISSUE_NUMBER}"
+        shell: bash
+
+  # ── Job 3: clear-user-request-label ───────────────────────────────
+  # When an authorized user comments on an issue/PR that carries the
+  # 'ai:user_request' label, remove it (the user has responded).
+  # Fires on issue_comment only; bot comments are excluded.
+  # ──────────────────────────────────────────────────────────────────
+  clear-user-request-label:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      github.event.comment.user.login != 'opencode-agent[bot]' &&
+      github.event.comment.user.login != 'coderabbitai[bot]' &&
+      github.event.comment.user.login != 'opencode-maintenance[bot]' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Remove ai:user_request label if present
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          IS_PR: ${{ github.event.issue.pull_request != null }}
+        run: |
+          # Check if the label is currently applied
+          if [[ "$IS_PR" == "true" ]]; then
+            HAS_LABEL=$(gh pr view "$ISSUE_NUMBER" --repo "$REPO" \
+              --json labels -q '[.labels[].name] | contains(["ai:user_request"])' \
+              2>/dev/null || echo "false")
+          else
+            HAS_LABEL=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" \
+              --json labels -q '[.labels[].name] | contains(["ai:user_request"])' \
+              2>/dev/null || echo "false")
+          fi
+
+          if [[ "$HAS_LABEL" == "true" ]]; then
+            if [[ "$IS_PR" == "true" ]]; then
+              gh pr edit "$ISSUE_NUMBER" --repo "$REPO" \
+                --remove-label 'ai:user_request' 2>/dev/null || true
+            else
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+                --remove-label 'ai:user_request' 2>/dev/null || true
+            fi
+            echo "::notice::Removed ai:user_request from #${ISSUE_NUMBER}"
+          fi
+        shell: bash

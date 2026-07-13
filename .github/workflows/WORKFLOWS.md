@@ -154,9 +154,10 @@ Example: `/oc implement add retry logic for AI failures --model=opencode/deepsee
 | **PR Review** | `.github/workflows/opencode-pr-review.yml` | Process 1 |
 | **PR Comment** | `.github/workflows/opencode-pr-comment.yml` | Processes 2, 3, 6 |
 | **Issue Handler** | `.github/workflows/opencode-issue-handler.yml` | Processes 4, 5 |
+| **Label Manager** | `.github/workflows/opencode-labels.yml` | AI help menu, checkbox proxy, label cleanup |
 | **Auth Script** | `.github/scripts/auth.sh` | Shared command parser + flags |
 | **PR Tasks Script** | `.github/scripts/pr-tasks.sh` | Deterministic slug/checklist/changelog |
-| **Run Action** | `.github/actions/opencode-run/action.yml` | Lifecycle: ack / react / status |
+| **Run Action** | `.github/actions/opencode-run/action.yml` | Lifecycle: ack / react / status / labels |
 
 ## Shared Infrastructure
 
@@ -270,3 +271,43 @@ same model and prompt.
 All AI jobs have explicit `timeout-minutes` (15 for
 review/discussion, 30 for implementation) to bound AI freeze scenarios
 — previously only Process 4/5 had this protection.
+
+---
+
+## Label System
+
+### Label lifecycle
+
+All labels are created on demand (blue `0075ca`) if they don't exist. All label
+mutations use `|| true` so a missing label never fails a job.
+
+| Label | Added | Removed |
+|-------|-------|---------|
+| `ai:working` | Immediately when any process starts | When the process succeeds or fails |
+| `ai:pr-review` | P1 start | P1 end |
+| `ai:pr-comment` | P2/P3 start | P2/P3 end |
+| `ai:pr-task` | P6 start | P6 end |
+| `ai:issue-review` | P4 start | P4 end |
+| `ai:issue-implement` | P5 start | P5 end |
+| `ai:help` | By human | Human removes when done |
+| `ai:user_request` | By AI when blocked on human input | When next authorized human comments |
+
+### AI Help Menu (`ai:help` label)
+
+Add the `ai:help` label to an open issue or PR. The `inject-help-menu` job in
+`opencode-labels.yml` appends a contextual checkbox menu to the body (idempotent
+— skips if `<!-- opencode-help-menu -->` marker already present).
+
+Checking a box fires the corresponding `/oc` command via `GH_PAT`. The checkbox
+resets to `- [ ]` immediately after firing. Requires `GH_PAT` — silently skips
+if not configured.
+
+**Authorization:** A live `GET /repos/{repo}/collaborators/{sender}/permission`
+check verifies the sender has `write`/`maintain`/`admin` access before posting.
+This is stronger than the `author_association` check used by `/oc` comments.
+
+### `ai:user_request`
+
+The AI adds this label when it asks a question and cannot proceed without human
+input. The `clear-user-request-label` job in `opencode-labels.yml` removes it
+automatically when the next authorized user comments on the issue/PR.

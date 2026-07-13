@@ -72,6 +72,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-ack: 'true'
           process-label: 'Process 1 — PR Review'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'true'
+          add-labels: 'ai:working ai:pr-review'
 
       - name: Run opencode (PR code review)
         id: opencode
@@ -353,6 +356,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-success: 'true'
           process-label: 'Process 1 — PR Review'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-review'
 
       - name: Terminal — failure
         if: >-
@@ -368,6 +374,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-failure: 'true'
           process-label: 'Process 1 — PR Review'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-review'
 
       - name: Propagate failure
         if: >-
