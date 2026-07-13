@@ -85,6 +85,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-ack: 'true'
           process-label: 'Process 4 — Issue Review'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'false'
+          add-labels: 'ai:working ai:issue-review'
 
       - name: Run opencode (Process 4 — Issue Review & Refinement)
         id: opencode
@@ -145,6 +148,16 @@ jobs:
                (no code changes).
             4. **Next Steps** — what the human should confirm or
                provide before implementation can begin.
+
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh issue edit ${{ github.event.issue.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
 
             ## Hard Constraints
             - Never modify the repository tree.
@@ -225,6 +238,16 @@ jobs:
             4. **Next Steps** — what the human should confirm or
                provide before implementation can begin.
 
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh issue edit ${{ github.event.issue.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
+
             ## Hard Constraints
             - Never modify the repository tree.
             - Never auto-commit or push.
@@ -246,6 +269,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-success: 'true'
           process-label: 'Process 4 — Issue Review'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'false'
+          remove-labels: 'ai:working ai:issue-review'
 
       - name: Terminal — failure
         if: >-
@@ -260,6 +286,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-failure: 'true'
           process-label: 'Process 4 — Issue Review'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'false'
+          remove-labels: 'ai:working ai:issue-review'
 
       - name: Propagate failure
         if: >-
@@ -327,6 +356,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-ack: 'true'
           process-label: 'Process 5 — Issue Implementation'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'false'
+          add-labels: 'ai:working ai:issue-implement'
 
       - name: Run opencode (Process 5 — Issue Work & PR Creation)
         id: opencode
@@ -445,6 +477,16 @@ jobs:
             gh issue comment "$ISSUE_NUMBER" \
               --body "🚀 Implementation PR created: #<pr_number>\n\nBranch: \`$BRANCH\`"
             ```
+
+            ## Label: ai:user_request
+            If you are blocked and must post a question before you can
+            proceed, add the label BEFORE posting your question:
+            ```bash
+            gh issue edit ${{ github.event.issue.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            when posting the final PR link or any completion message.
 
             ## Hard Constraints
             - Never expand scope beyond the issue requirements.
@@ -607,6 +649,16 @@ jobs:
               --body "🚀 Implementation PR created: #<pr_number>\n\nBranch: \`$BRANCH\`"
             ```
 
+            ## Label: ai:user_request
+            If you are blocked and must post a question before you can
+            proceed, add the label BEFORE posting your question:
+            ```bash
+            gh issue edit ${{ github.event.issue.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            when posting the final PR link or any completion message.
+
             ## Hard Constraints
             - Never expand scope beyond the issue requirements.
             - Never commit directly to the default branch.
@@ -651,6 +703,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-success: 'true'
           process-label: 'Process 5 — Issue Implementation'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'false'
+          remove-labels: 'ai:working ai:issue-implement'
 
       - name: Terminal — failure
         if: >-
@@ -665,6 +720,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-failure: 'true'
           process-label: 'Process 5 — Issue Implementation'
+          issue-number: ${{ github.event.issue.number }}
+          is-pull-request: 'false'
+          remove-labels: 'ai:working ai:issue-implement'
 
       - name: Propagate failure
         if: >-

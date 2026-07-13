@@ -49,6 +49,25 @@ inputs:
     description: 'Human-readable process label shown in the status comment'
     required: false
     default: 'OpenCode'
+  # ── Label management ─────────────────────────────────────────────
+  # Labels are created on demand (blue 0075ca) if they don't exist.
+  # All operations use `|| true` so a missing label never fails a job.
+  issue-number:
+    description: 'Issue or PR number for label operations'
+    required: false
+    default: ''
+  is-pull-request:
+    description: 'true if the target is a PR (use pull-requests label endpoint)'
+    required: false
+    default: 'false'
+  add-labels:
+    description: 'Space-separated label names to add (created with color 0075ca if missing)'
+    required: false
+    default: ''
+  remove-labels:
+    description: 'Space-separated label names to remove (noop if label absent)'
+    required: false
+    default: ''
 
 outputs:
   status-comment-id:
@@ -113,6 +132,39 @@ runs:
 
         echo "comment_id=${STATUS_ID}" >> "$GITHUB_OUTPUT"
 
+    # ── ADD LABELS ──────────────────────────────────────────────────
+    # Add GitHub labels to the issue/PR. Fires when do-ack is true and
+    # add-labels is non-empty. Labels are created on demand.
+    # ─────────────────────────────────────────────────────────────────
+    - name: Add labels
+      if: inputs.do-ack == 'true' && inputs.add-labels != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}
+        LABELS: ${{ inputs.add-labels }}
+        IS_PR: ${{ inputs.is-pull-request }}
+      run: |
+        if [[ -z "$ISSUE_NUMBER" ]]; then
+          echo "::warning::opencode-run: add-labels set but issue-number is empty — skipping"
+          exit 0
+        fi
+        for LABEL in $LABELS; do
+          # Create label if it doesn't exist (idempotent: POST returns 422 if exists)
+          gh api --method POST "/repos/${REPO}/labels" \
+            -f name="$LABEL" -f color='0075ca' \
+            2>/dev/null || true
+          # Add to issue or PR
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "$LABEL" 2>/dev/null || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "$LABEL" 2>/dev/null || true
+          fi
+        done
+
     # ── RUNNING ─────────────────────────────────────────────────────
     # Update the status comment to show work is actively running.
     # ─────────────────────────────────────────────────────────────────
@@ -173,6 +225,28 @@ runs:
             -f body="$BODY" 2>/dev/null || true
         fi
 
+    # ── REMOVE LABELS (success) ──────────────────────────────────────
+    - name: Remove labels on success
+      if: inputs.do-success == 'true' && inputs.remove-labels != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}
+        LABELS: ${{ inputs.remove-labels }}
+        IS_PR: ${{ inputs.is-pull-request }}
+      run: |
+        if [[ -z "$ISSUE_NUMBER" ]]; then exit 0; fi
+        for LABEL in $LABELS; do
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          fi
+        done
+
     # ── FAILURE ─────────────────────────────────────────────────────
     # Post 👎 reaction and flip status comment to failed.
     # ─────────────────────────────────────────────────────────────────
@@ -205,3 +279,25 @@ runs:
             "/repos/${REPO}/issues/comments/${STATUS_ID}" \
             -f body="$BODY" 2>/dev/null || true
         fi
+
+    # ── REMOVE LABELS (failure) ──────────────────────────────────────
+    - name: Remove labels on failure
+      if: inputs.do-failure == 'true' && inputs.remove-labels != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}
+        LABELS: ${{ inputs.remove-labels }}
+        IS_PR: ${{ inputs.is-pull-request }}
+      run: |
+        if [[ -z "$ISSUE_NUMBER" ]]; then exit 0; fi
+        for LABEL in $LABELS; do
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          fi
+        done

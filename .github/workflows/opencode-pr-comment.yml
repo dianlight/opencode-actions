@@ -152,6 +152,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-ack: 'true'
           process-label: 'Process 2 — Thread Reply'
+          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          is-pull-request: 'true'
+          add-labels: 'ai:working ai:pr-comment'
 
       - name: Run opencode (Process 2 — Bot thread reply)
         id: opencode
@@ -191,6 +194,16 @@ jobs:
                commit with a conventional commit message, push, and
                respond in the thread linking the commit.
             5. If the request is ambiguous, ask for clarification.
+
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.issue.number || github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
 
             ## Output
             Reply to the thread via `gh api`:
@@ -247,6 +260,16 @@ jobs:
                respond in the thread linking the commit.
             5. If the request is ambiguous, ask for clarification.
 
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.issue.number || github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
+
             ## Output
             Reply to the thread via `gh api`:
             ```bash
@@ -268,6 +291,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-success: 'true'
           process-label: 'Process 2 — Thread Reply'
+          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
 
       - name: Terminal — failure
         if: >-
@@ -283,6 +309,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-failure: 'true'
           process-label: 'Process 2 — Thread Reply'
+          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
 
       - name: Propagate failure
         if: >-
@@ -320,6 +349,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-ack: 'true'
           process-label: 'Process 3 — Thread Takeover'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          add-labels: 'ai:working ai:pr-comment'
 
       - name: Run opencode (Process 3 — User-owned thread takeover)
         id: opencode
@@ -362,6 +394,16 @@ jobs:
                a. Reply inline in the thread.
                b. From this point on, further interactions follow
                   Process 2 logic.
+
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
 
             ## Output
             Reply to the thread via `gh api`:
@@ -422,6 +464,16 @@ jobs:
                b. From this point on, further interactions follow
                   Process 2 logic.
 
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
+
             ## Output
             Reply to the thread via `gh api`:
             ```bash
@@ -441,6 +493,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-success: 'true'
           process-label: 'Process 3 — Thread Takeover'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
 
       - name: Terminal — failure
         if: >-
@@ -455,6 +510,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-failure: 'true'
           process-label: 'Process 3 — Thread Takeover'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
 
       - name: Propagate failure
         if: >-
@@ -515,6 +573,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-ack: 'true'
           process-label: 'Process 6 — PR Task'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          add-labels: 'ai:working ai:pr-task'
 
       - name: Run opencode (Process 6 — PR Task Execution)
         id: opencode
@@ -688,6 +749,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-success: 'true'
           process-label: 'Process 6 — PR Task'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-task'
 
       - name: Terminal — failure
         if: >-
@@ -702,6 +766,9 @@ jobs:
           server-url: ${{ github.server_url }}
           do-failure: 'true'
           process-label: 'Process 6 — PR Task'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-task'
 
       - name: Propagate failure
         if: >-
