@@ -125,16 +125,19 @@ CLEOF
   if grep -q '^## \[Unreleased\]' "$CHANGELOG"; then
     if grep -q '^### Added' "$CHANGELOG"; then
       # Insert after the first ### Added line
+  TMP_CHANGELOG=$(mktemp)
+  trap 'rm -f "$TMP_CHANGELOG"' EXIT
+
       awk -v entry="$ENTRY" '
         !done && /^### Added/ { print; print entry; done=1; next }
         { print }
-      ' "$CHANGELOG" > /tmp/changelog.new
+      ' "$CHANGELOG" > "$TMP_CHANGELOG"
     else
       # Insert ### Added section right after ## [Unreleased]
       awk -v entry="$ENTRY" '
         !done && /^## \[Unreleased\]/ { print; print ""; print "### Added"; print entry; done=1; next }
         { print }
-      ' "$CHANGELOG" > /tmp/changelog.new
+      ' "$CHANGELOG" > "$TMP_CHANGELOG"
     fi
   else
     # Prepend a full ## [Unreleased] block before the first ## [version]
@@ -148,10 +151,11 @@ CLEOF
         done=1
       }
       { print }
-    ' "$CHANGELOG" > /tmp/changelog.new
+    ' "$CHANGELOG" > "$TMP_CHANGELOG"
   fi
 
-  mv /tmp/changelog.new "$CHANGELOG"
+  mv "$TMP_CHANGELOG" "$CHANGELOG"
+  trap - EXIT
   echo "::notice::changelog: appended entry for issue #${ISSUE_NUMBER}"
   exit 0
 fi
