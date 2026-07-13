@@ -107,12 +107,19 @@ formatted markdown comments (strictly zero code changes).
 - Comment matches `/oc implement <info>`
 - User is OWNER, MEMBER, or COLLABORATOR
 
+**Optional flags** (append after `<information>` on the same line):
+- `--model=<id>` — override the AI model (default: `opencode/north-mini-code-free`)
+- `--draft` — create the PR as a GitHub draft
+- `--no-changelog` — skip the CHANGELOG.md append step
+
+Example: `/oc implement add retry logic for AI failures --model=opencode/deepseek-v4-flash-free --draft`
+
 **Actions:**
-1. Extracts the `<information>` string + issue body
-2. Sanitizes the title to generate a unique feature branch
+1. Parses flags from the command; strips them from the task description
+2. Computes a branch slug via `pr-tasks.sh slug` (deterministic, not AI-generated)
 3. Implements the feature, commits, pushes
-4. Appends a CHANGELOG.md entry
-5. Creates a Pull Request with task checklist (`- [ ] task`)
+4. Appends a CHANGELOG.md entry via `pr-tasks.sh changelog` (unless `--no-changelog`)
+5. Creates a Pull Request (draft if `--draft`) with task checklist (`- [ ] task`)
 
 **Workflow:** `.github/workflows/opencode-issue-handler.yml`
 
@@ -127,13 +134,14 @@ formatted markdown comments (strictly zero code changes).
 - Comment matches `/oc task` or `/oc task <task>`
 - User is OWNER, MEMBER, or COLLABORATOR
 
+**Optional flags** (append after `<task>`):
+- `--model=<id>` — override the AI model (default: `opencode/north-mini-code-free`)
+
 **Actions:**
-- If `<task>` argument present: looks up that description in the PR
-  description
-- If empty: parses the PR body, extracts the first uncompleted
-  `- [ ]` task, and uses it as the execution objective
-- Executes localized refactoring, pushes code, flips the checkbox
-  to `- [x]` in the PR summary
+- If `<task>` argument present: looks up that description in the PR body
+- If empty: parses the PR body, extracts the first uncompleted `- [ ]` task
+- Executes localized refactoring, pushes code
+- Flips the checkbox `- [x]` via `pr-tasks.sh check-task` (scripted, not AI-generated)
 
 **Workflow:** `.github/workflows/opencode-pr-comment.yml`
 
@@ -146,14 +154,16 @@ formatted markdown comments (strictly zero code changes).
 | **PR Review** | `.github/workflows/opencode-pr-review.yml` | Process 1 |
 | **PR Comment** | `.github/workflows/opencode-pr-comment.yml` | Processes 2, 3, 6 |
 | **Issue Handler** | `.github/workflows/opencode-issue-handler.yml` | Processes 4, 5 |
-| **Auth Script** | `.github/scripts/auth.sh` | Shared command parser |
+| **Auth Script** | `.github/scripts/auth.sh` | Shared command parser + flags |
+| **PR Tasks Script** | `.github/scripts/pr-tasks.sh` | Deterministic slug/checklist/changelog |
+| **Run Action** | `.github/actions/opencode-run/action.yml` | Lifecycle: ack / react / status |
 
 ## Shared Infrastructure
 
 ### Authorization Script (`.github/scripts/auth.sh`)
 
 A reusable bash script that parses `/oc` command prefixes from
-comment bodies and determines the sub-command:
+comment bodies and determines the sub-command and optional flags:
 
 | Input | `SUBCOMMAND` Output |
 |-------|---------------------|
@@ -162,6 +172,34 @@ comment bodies and determines the sub-command:
 | `/oc task <task>` | `task` |
 | `/oc task` | `task` |
 | Non-`/oc` comment | `none` |
+
+**Recognized flags** (stripped from `TASK_ARGS`):
+- `--model=<id>` → `FLAG_MODEL`
+- `--draft` → `FLAG_DRAFT=true`
+- `--no-changelog` → `FLAG_NO_CHANGELOG=true`
+
+### PR Tasks Script (`.github/scripts/pr-tasks.sh`)
+
+Deterministic git-plumbing helpers that replace model-delegated work:
+
+| Subcommand | Purpose |
+|------------|---------|
+| `slug <title>` | Sanitize a title into a ≤40-char branch slug |
+| `check-task <pr#> [needle]` | Flip first `- [ ]` → `- [x]` matching needle |
+| `changelog <issue#> <message>` | Append `[Unreleased] / Added` entry to CHANGELOG.md |
+
+### Composite Action (`.github/actions/opencode-run`)
+
+The shared lifecycle action called by all AI-invoking jobs:
+
+| Stage | Input | Effect |
+|-------|-------|--------|
+| Ack | `do-ack: true` | Post 👀 on trigger comment + create sticky status comment |
+| Success | `do-success: true` | Post 🎉 + update status comment to ✅ Done |
+| Failure | `do-failure: true` | Post 👎 + update status comment to ❌ Failed with run link |
+
+The status comment uses a hidden HTML marker to find and edit itself
+instead of posting multiple comments.
 
 ### Bot Exclusion
 
@@ -199,10 +237,36 @@ draft pull requests.
 ### Command Parsing Pre-Step
 
 All workflows run `.github/scripts/auth.sh` as an early step to
-determine the exact sub-command before invoking the AI, enabling
-clean routing without wasting AI tokens on misrouted events.
+determine the exact sub-command and flags before invoking the AI,
+enabling clean routing without wasting AI tokens on misrouted events.
 
 ### Thread Ownership Detection
 
 Process 2 checks thread authorship before running AI to avoid
 triggering the model on non-bot threads (which would be Process 3).
+
+### Deterministic Scripting
+
+Process 5 computes the branch slug via `pr-tasks.sh slug` before
+calling the AI, so the model receives a pre-computed `$BRANCH` and
+does not spend tokens on text transforms. The CHANGELOG entry and
+checklist flip are also scripted post-AI steps.
+
+### Acknowledgement Feedback
+
+All AI jobs post a 👀 reaction and a sticky "running" status comment
+at the start of the job, so users get immediate feedback without
+waiting for the AI to finish. The status comment is edited to
+✅/❌ on completion.
+
+### Retry on Failure
+
+Every AI job retries once after a 30-second pause on transient
+failure (rate limits, timeouts, 5xx). The second attempt uses the
+same model and prompt.
+
+### Timeouts
+
+All AI jobs have explicit `timeout-minutes` (15 for
+review/discussion, 30 for implementation) to bound AI freeze scenarios
+— previously only Process 4/5 had this protection.

@@ -25,10 +25,12 @@ jobs:
       !contains(github.event.comment.body, '/oc task') &&
       !contains(github.event.comment.body, '/oc implement')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       id-token: write
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -57,6 +59,19 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Acknowledge immediately — post 👀 and a "running" status comment
+      - name: Acknowledge
+        if: steps.pr-check.outputs.skip != 'true'
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-ack: 'true'
+          process-label: 'Process 1 — PR Review'
 
       - name: Run opencode (PR code review)
         id: opencode
@@ -186,30 +201,178 @@ jobs:
             - Be actionable: explain why and provide a fix.
             - Skip files with nothing to flag.
 
-      - name: React ✅ on success
-        if: steps.opencode.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Retry once on transient failure (rate-limit / timeout / 5xx)
+      - name: Retry opencode on failure
+        id: opencode-retry
+        if: steps.pr-check.outputs.skip != 'true' && steps.opencode.outcome == 'failure'
+        continue-on-error: true
         run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || true
+          echo "::warning::Process 1: first attempt failed — retrying after 30s"
+          sleep 30
+        shell: bash
 
-      - name: React ❌ on failure
-        if: steps.opencode.outcome == 'failure'
+      - name: Run opencode — retry attempt
+        id: opencode2
+        if: steps.pr-check.outputs.skip != 'true' && steps.opencode.outcome == 'failure'
+        continue-on-error: true
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || true
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: opencode/deepseek-v4-flash-free
+          use_github_token: true
+          share: ${{ github.event.repository.private == false }}
+          prompt: |
+            You are the Opencode Automated Git Agent operating inside an
+            isolated CI environment. You are executing Process 1: On-Demand
+            PR Code Review.
+
+            ## Rules of Engagement
+            1. You were invoked by an authorized collaborator.
+            2. You MUST NOT auto-commit, push, or modify any file in this
+               phase. You are strictly read-only.
+            3. Submit all feedback as formal PR reviews with inline
+               suggestions on specific lines of code.
+
+            ## Context
+            - Repository: ${{ github.repository }}
+            - Pull request: #${{ github.event.issue.number }}
+            - Trigger command: ${{ steps.parse.outputs.SUBCOMMAND }}
+
+            ## Mandatory Output Mechanism
+
+            You MUST submit your review using the `gh` CLI. Do NOT call
+            `gh pr comment`.
+
+            ### Step 1 — Resolve outdated review threads
+
+            Before submitting the new review, check for existing review
+            threads that have been addressed by the current diff and
+            resolve them.
+
+            Retrieve all open review threads via GraphQL:
+
+            ```bash
+            gh api graphql -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    reviewThreads(first: 100) {
+                      nodes {
+                        id
+                        isResolved
+                        comments(first: 1) {
+                          nodes { path line body }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ' -f owner="${{ github.repository_owner }}" \
+              -f repo="${{ github.event.repository.name }}" \
+              -F number=${{ github.event.issue.number }}
+            ```
+
+            For each thread whose issue is visibly fixed in the current
+            diff, resolve it:
+
+            ```bash
+            gh api graphql -f query='
+              mutation($threadId: ID!) {
+                resolveReviewThread(input: { threadId: $threadId }) {
+                  thread { isResolved }
+                }
+              }
+            ' -f threadId="<THREAD_NODE_ID>"
+            ```
+
+            ### Step 2 — Submit the formal review
+
+            Use a single `gh api` call:
+
+            ```bash
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              /repos/{owner}/{repo}/pulls/{pull_number}/reviews \
+              --input - <<'REVIEWEOF'
+            {
+              "commit_id": "<HEAD_SHA>",
+              "body": "<review summary>",
+              "event": "<APPROVE|REQUEST_CHANGES|COMMENT>",
+              "comments": [
+                {
+                  "path": "path/to/file.ext",
+                  "line": 42,
+                  "body": "Category label...\n```suggestion\n// proposed fix\n```"
+                }
+              ]
+            }
+            REVIEWEOF
+            ```
+
+            Rules for the payload:
+            - `commit_id`: get via
+              `gh pr view ${{ github.event.issue.number }} --json headRefOid -q .headRefOid`
+            - `event`: `REQUEST_CHANGES` if any CRITICAL or PERFORMANCE
+              issue; `COMMENT` for QUALITY/NITPICK only; `APPROVE` if
+              clean.
+            - `body`: review summary, max 10 lines, with issue counts
+              per category.
+            - `comments[].body`: prefix with category; include a
+              ````suggestion` block when a concrete fix is possible.
+            - Only include entries for lines that have actual findings.
+
+            Do NOT run any other `gh` command after the review call.
+
+            ## Review Categories
+            - 🚨 [CRITICAL]: Logic errors, crashes, security issues.
+            - ⚡ [PERFORMANCE]: Inefficient algorithms, memory leaks.
+            - 🛠️ [QUALITY]: Readability, maintainability, naming.
+            - 💡 [NITPICK]: Minor style preferences.
+
+            ## Hard Constraints
+            - Never implement or modify code — you are read-only.
+            - Never leave generic global comments — use inline threads.
+            - Be actionable: explain why and provide a fix.
+            - Skip files with nothing to flag.
+
+      # Terminal outcome — use the composite action for react + status
+      - name: Terminal — success
+        if: >-
+          steps.pr-check.outputs.skip != 'true' &&
+          (steps.opencode.outcome == 'success' || steps.opencode2.outcome == 'success')
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-success: 'true'
+          process-label: 'Process 1 — PR Review'
+
+      - name: Terminal — failure
+        if: >-
+          steps.pr-check.outputs.skip != 'true' &&
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-failure: 'true'
+          process-label: 'Process 1 — PR Review'
 
       - name: Propagate failure
-        if: steps.opencode.outcome == 'failure'
+        if: >-
+          steps.pr-check.outputs.skip != 'true' &&
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
         run: exit 1
+        shell: bash

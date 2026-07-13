@@ -40,9 +40,35 @@ python scripts/opencode_maintenance.py
 
 Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/COLLABORATOR`. Unknown users are silently skipped.
 
-### Shared script
+### Shared scripts
 
-`.github/scripts/auth.sh` parses `/oc` commands and outputs `IS_OC_COMMAND`, `SUBCOMMAND`, and `TASK_ARGS` via `GITHUB_OUTPUT`.
+`.github/scripts/auth.sh` parses `/oc` commands and outputs `IS_OC_COMMAND`,
+`SUBCOMMAND`, `TASK_ARGS`, and flag outputs via `GITHUB_OUTPUT`.
+
+**Recognized flags** (trailing the subcommand on the first line):
+- `--model=<id>` — override the AI model for this invocation (`FLAG_MODEL`)
+- `--draft` — create PR as draft when applicable, e.g. `/oc implement ... --draft` (`FLAG_DRAFT`)
+- `--no-changelog` — skip appending a CHANGELOG entry in Process 5 (`FLAG_NO_CHANGELOG`)
+
+Unknown `--flags` are left in `TASK_ARGS` and reported via `::warning::`.
+
+`.github/scripts/pr-tasks.sh` provides deterministic git-plumbing helpers
+(replaces work previously delegated to the AI model):
+- `slug <title>` — sanitize a title into a 40-char branch slug
+- `check-task <pr#> [needle]` — flip first matching `- [ ]` → `- [x]` in PR body
+- `changelog <issue#> <message>` — append `## [Unreleased] / ### Added` entry to CHANGELOG.md
+
+### Shared composite action
+
+`.github/actions/opencode-run/action.yml` owns the per-job lifecycle:
+- **`do-ack: true`** — immediately post 👀 (`eyes`) on the trigger comment and create a
+  sticky "running" status comment linking to the Actions run
+- **`do-success: true`** — post 🎉 (`hooray`) and flip the status comment to "✅ Done"
+- **`do-failure: true`** — post 👎 (`-1`) and flip the status comment to "❌ Failed"
+
+All workflows call this action by local path `uses: ./.github/actions/opencode-run`
+**not** by `owner/repo@sha`. The action and `pr-tasks.sh` are both registered in
+`.github/sync.yml` so downstream repos receive them automatically.
 
 ### Sync system
 
@@ -64,8 +90,10 @@ Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/
 
 - All OpenCode steps pin the action: `anomalyco/opencode/github@<sha>`
 - Concurrency groups are keyed by issue/PR number with `cancel-in-progress: false`
-- Every process step uses `continue-on-error: true` followed by reaction-on-success/failure steps
-- Issue titles are passed via `env:` (not inline substitution) to prevent shell injection
+- Every process has: **Acknowledge** (ack step) → opencode invocation → one **retry** after 30s → terminal success/failure via the composite action
+- Issue titles and comment bodies are passed via `env:` (not inline substitution) to prevent shell injection
+- Timeouts: all PR-comment and issue-handler jobs have `timeout-minutes` (15 for review/discussion, 30 for implementation)
+- The composite action (`opencode-run`) is the single source of truth for reactions and status comments; do not add bare `gh api .../reactions` calls to workflows
 
 ## Renovate
 
