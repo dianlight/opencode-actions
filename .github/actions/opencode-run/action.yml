@@ -1,0 +1,293 @@
+name: opencode-run
+description: >
+  Shared lifecycle composite action for OpenCode workflow jobs.
+  Handles the ack reaction, sticky status comment, and terminal
+  react (hooray/−1) steps so individual jobs stay thin.
+
+# ─────────────────────────────────────────────────────────────────────
+# NOTE: this action is referenced by LOCAL PATH in all three active
+# workflows and in downstream repos synced via .github/sync.yml.
+# Any change here must be paired with a sync.yml update so downstream
+# repos receive the new file.
+# ─────────────────────────────────────────────────────────────────────
+
+inputs:
+  github-token:
+    description: 'GITHUB_TOKEN for gh CLI calls'
+    required: true
+  comment-id:
+    description: 'Numeric ID of the triggering comment'
+    required: true
+  repository:
+    description: 'owner/repo for API calls (github.repository)'
+    required: true
+  run-id:
+    description: 'GitHub Actions run ID for the status comment link'
+    required: true
+  server-url:
+    description: 'GitHub server URL (github.server_url)'
+    required: false
+    default: 'https://github.com'
+  # Lifecycle stage selector — callers set exactly one to 'true'.
+  do-ack:
+    description: 'Post eyes reaction + queued status comment'
+    required: false
+    default: 'false'
+  do-running:
+    description: 'Update status comment to running'
+    required: false
+    default: 'false'
+  do-success:
+    description: 'Post hooray reaction + update status to done'
+    required: false
+    default: 'false'
+  do-failure:
+    description: 'Post -1 reaction + update status to failed'
+    required: false
+    default: 'false'
+  process-label:
+    description: 'Human-readable process label shown in the status comment'
+    required: false
+    default: 'OpenCode'
+  # ── Label management ─────────────────────────────────────────────
+  # Labels are created on demand (blue 0075ca) if they don't exist.
+  # All operations use `|| true` so a missing label never fails a job.
+  issue-number:
+    description: 'Issue or PR number for label operations'
+    required: false
+    default: ''
+  is-pull-request:
+    description: 'true if the target is a PR (use pull-requests label endpoint)'
+    required: false
+    default: 'false'
+  add-labels:
+    description: 'Space-separated label names to add (created with color 0075ca if missing)'
+    required: false
+    default: ''
+  remove-labels:
+    description: 'Space-separated label names to remove (noop if label absent)'
+    required: false
+    default: ''
+
+outputs:
+  status-comment-id:
+    description: 'ID of the sticky status comment (set by do-ack)'
+    value: ${{ steps.ack-status.outputs.comment_id }}
+
+runs:
+  using: composite
+  steps:
+
+    # ── ACK ────────────────────────────────────────────────────────
+    # Immediately post 👀 to the trigger comment and create the
+    # sticky status comment in a queued/running state.
+    # ─────────────────────────────────────────────────────────────
+    - name: Ack — eyes reaction + queued status comment
+      id: ack-status
+      if: inputs.do-ack == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_URL: ${{ inputs.server-url }}/${{ inputs.repository }}/actions/runs/${{ inputs.run-id }}
+        COMMENT_ID: ${{ inputs.comment-id }}
+        REPO: ${{ inputs.repository }}
+        LABEL: ${{ inputs.process-label }}
+      run: |
+        # React 👀 on the trigger comment (try issue-comment first, fall back to pull-comment)
+        gh api --method POST \
+          "/repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+          -f content='eyes' 2>/dev/null || \
+        gh api --method POST \
+          "/repos/${REPO}/pulls/comments/${COMMENT_ID}/reactions" \
+          -f content='eyes' 2>/dev/null || true
+
+        # Post the initial queued/running status comment.
+        # Embed a hidden marker so we can find and edit it later.
+        BODY="<!-- opencode-status-marker: ${COMMENT_ID} -->
+        **${LABEL}** — ⏳ Running… ([view run](${RUN_URL}))"
+
+        # Detect issue vs PR context from the comment endpoint
+        ISSUE_NUMBER=$(gh api "/repos/${REPO}/issues/comments/${COMMENT_ID}" \
+          --jq '.issue_url | split("/") | last' 2>/dev/null || echo "")
+
+        if [[ -n "$ISSUE_NUMBER" ]]; then
+          STATUS_ID=$(gh issue comment "$ISSUE_NUMBER" \
+            --repo "$REPO" \
+            --body "$BODY" \
+            --json id -q .id 2>/dev/null || echo "")
+        else
+          # Fallback: determine PR number from the pull review comment
+          PR_NUMBER=$(gh api "/repos/${REPO}/pulls/comments/${COMMENT_ID}" \
+            --jq '.pull_request_url | split("/") | last' 2>/dev/null || echo "")
+          if [[ -n "$PR_NUMBER" ]]; then
+            STATUS_ID=$(gh pr comment "$PR_NUMBER" \
+              --repo "$REPO" \
+              --body "$BODY" \
+              --json id -q .id 2>/dev/null || echo "")
+          fi
+        fi
+
+        echo "comment_id=${STATUS_ID}" >> "$GITHUB_OUTPUT"
+
+    # ── ADD LABELS ──────────────────────────────────────────────────
+    # Add GitHub labels to the issue/PR. Fires when do-ack is true and
+    # add-labels is non-empty. Labels are created on demand.
+    # ─────────────────────────────────────────────────────────────────
+    - name: Add labels
+      if: inputs.do-ack == 'true' && inputs.add-labels != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}
+        LABELS: ${{ inputs.add-labels }}
+        IS_PR: ${{ inputs.is-pull-request }}
+      run: |
+        if [[ -z "$ISSUE_NUMBER" ]]; then
+          echo "::warning::opencode-run: add-labels set but issue-number is empty — skipping"
+          exit 0
+        fi
+        for LABEL in $LABELS; do
+          # Create label if it doesn't exist (idempotent: POST returns 422 if exists)
+          gh api --method POST "/repos/${REPO}/labels" \
+            -f name="$LABEL" -f color='0075ca' \
+            2>/dev/null || true
+          # Add to issue or PR
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "$LABEL" 2>/dev/null || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "$LABEL" 2>/dev/null || true
+          fi
+        done
+
+    # ── RUNNING ─────────────────────────────────────────────────────
+    # Update the status comment to show work is actively running.
+    # ─────────────────────────────────────────────────────────────────
+    - name: Status — update to running
+      if: inputs.do-running == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_URL: ${{ inputs.server-url }}/${{ inputs.repository }}/actions/runs/${{ inputs.run-id }}
+        COMMENT_ID: ${{ inputs.comment-id }}
+        REPO: ${{ inputs.repository }}
+        LABEL: ${{ inputs.process-label }}
+        STATUS_ID: ${{ steps.ack-status.outputs.comment_id }}
+      run: |
+        if [[ -z "$STATUS_ID" || "$STATUS_ID" == "null" ]]; then
+          echo "::warning::opencode-run: could not find status comment to update (running)"
+          exit 0
+        fi
+        BODY="<!-- opencode-status-marker: ${COMMENT_ID} -->
+        **${LABEL}** — 🤖 Working… ([view run](${RUN_URL}))"
+        gh api --method PATCH \
+          "/repos/${REPO}/issues/comments/${STATUS_ID}" \
+          -f body="$BODY" 2>/dev/null || true
+
+    # ── SUCCESS ─────────────────────────────────────────────────────
+    # Post 🎉 reaction and flip status comment to done.
+    # ─────────────────────────────────────────────────────────────────
+    - name: React ✅ + status done
+      if: inputs.do-success == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_URL: ${{ inputs.server-url }}/${{ inputs.repository }}/actions/runs/${{ inputs.run-id }}
+        COMMENT_ID: ${{ inputs.comment-id }}
+        REPO: ${{ inputs.repository }}
+        LABEL: ${{ inputs.process-label }}
+        STATUS_ID: ${{ steps.ack-status.outputs.comment_id }}
+      run: |
+        # React 🎉 (hooray) on the trigger comment
+        gh api --method POST \
+          "/repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+          -f content='hooray' 2>/dev/null || \
+        gh api --method POST \
+          "/repos/${REPO}/pulls/comments/${COMMENT_ID}/reactions" \
+          -f content='hooray' 2>/dev/null || true
+
+        # Flip status comment to done
+        if [[ -n "$STATUS_ID" && "$STATUS_ID" != "null" ]]; then
+          BODY="<!-- opencode-status-marker: ${COMMENT_ID} -->
+        **${LABEL}** — ✅ Done ([view run](${RUN_URL}))"
+          gh api --method PATCH \
+            "/repos/${REPO}/issues/comments/${STATUS_ID}" \
+            -f body="$BODY" 2>/dev/null || true
+        fi
+
+    # ── REMOVE LABELS (success) ──────────────────────────────────────
+    - name: Remove labels on success
+      if: inputs.do-success == 'true' && inputs.remove-labels != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}
+        LABELS: ${{ inputs.remove-labels }}
+        IS_PR: ${{ inputs.is-pull-request }}
+      run: |
+        if [[ -z "$ISSUE_NUMBER" ]]; then exit 0; fi
+        for LABEL in $LABELS; do
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          fi
+        done
+
+    # ── FAILURE ─────────────────────────────────────────────────────
+    # Post 👎 reaction and flip status comment to failed.
+    # ─────────────────────────────────────────────────────────────────
+    - name: React ❌ + status failed
+      if: inputs.do-failure == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_URL: ${{ inputs.server-url }}/${{ inputs.repository }}/actions/runs/${{ inputs.run-id }}
+        COMMENT_ID: ${{ inputs.comment-id }}
+        REPO: ${{ inputs.repository }}
+        LABEL: ${{ inputs.process-label }}
+        STATUS_ID: ${{ steps.ack-status.outputs.comment_id }}
+      run: |
+        # React 👎 on the trigger comment
+        gh api --method POST \
+          "/repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+          -f content='-1' 2>/dev/null || \
+        gh api --method POST \
+          "/repos/${REPO}/pulls/comments/${COMMENT_ID}/reactions" \
+          -f content='-1' 2>/dev/null || true
+
+        # Flip status comment to failed (with run link for diagnosis)
+        if [[ -n "$STATUS_ID" && "$STATUS_ID" != "null" ]]; then
+          BODY="<!-- opencode-status-marker: ${COMMENT_ID} -->
+        **${LABEL}** — ❌ Failed — [check the run log](${RUN_URL}) for details"
+          gh api --method PATCH \
+            "/repos/${REPO}/issues/comments/${STATUS_ID}" \
+            -f body="$BODY" 2>/dev/null || true
+        fi
+
+    # ── REMOVE LABELS (failure) ──────────────────────────────────────
+    - name: Remove labels on failure
+      if: inputs.do-failure == 'true' && inputs.remove-labels != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}
+        LABELS: ${{ inputs.remove-labels }}
+        IS_PR: ${{ inputs.is-pull-request }}
+      run: |
+        if [[ -z "$ISSUE_NUMBER" ]]; then exit 0; fi
+        for LABEL in $LABELS; do
+          if [[ "$IS_PR" == "true" ]]; then
+            gh pr edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --remove-label "$LABEL" 2>/dev/null || true
+          fi
+        done

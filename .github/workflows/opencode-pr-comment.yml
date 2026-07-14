@@ -32,6 +32,7 @@ jobs:
       issues: write
     outputs:
       process: ${{ steps.route.outputs.process }}
+      model_override: ${{ steps.parse.outputs.FLAG_MODEL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -82,11 +83,18 @@ jobs:
     if: needs.route.outputs.process == 'process-2'
     needs: route
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       id-token: write
       contents: write
       pull-requests: write
+      issues: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
       - name: Check if this is a reply to an Opencode thread
         id: thread-check
         env:
@@ -115,7 +123,6 @@ jobs:
             fi
           elif [[ "$EVENT_NAME" == "issue_comment" ]]; then
             # Check if the most recent comment before this one was from the bot
-            # Check if the comment immediately before this one was from the bot
             LAST_COMMENT_AUTHOR=$(gh api \
               "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
               --jq '.[-2].user.login' 2>/dev/null || echo "")
@@ -132,6 +139,22 @@ jobs:
             echo "is_bot_thread=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Not a bot thread — skipping Process 2"
           fi
+
+      # Acknowledge immediately
+      - name: Acknowledge
+        if: steps.thread-check.outputs.is_bot_thread == 'true'
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-ack: 'true'
+          process-label: 'Process 2 — Thread Reply'
+          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          is-pull-request: 'true'
+          add-labels: 'ai:working ai:pr-comment'
 
       - name: Run opencode (Process 2 — Bot thread reply)
         id: opencode
@@ -172,6 +195,16 @@ jobs:
                respond in the thread linking the commit.
             5. If the request is ambiguous, ask for clarification.
 
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.issue.number || github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
+
             ## Output
             Reply to the thread via `gh api`:
             ```bash
@@ -180,48 +213,145 @@ jobs:
               -f body="Your response here"
             ```
 
-      - name: React ✅ on success
-        if: steps.opencode.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Retry once on transient failure
+      - name: Retry pause
+        if: steps.thread-check.outputs.is_bot_thread == 'true' && steps.opencode.outcome == 'failure'
         run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || true
+          echo "::warning::Process 2: first attempt failed — retrying after 30s"
+          sleep 30
+        shell: bash
 
-      - name: React ❌ on failure
-        if: steps.opencode.outcome == 'failure'
+      - name: Run opencode — retry attempt
+        id: opencode2
+        if: steps.thread-check.outputs.is_bot_thread == 'true' && steps.opencode.outcome == 'failure'
+        continue-on-error: true
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || true
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
+        with:
+          model: opencode/deepseek-v4-flash-free
+          use_github_token: true
+          prompt: |
+            You are the Opencode Automated Git Agent. You are executing
+            Process 2: PR Discussion (Opencode-Owned Thread Reply).
+
+            ## Rules of Engagement
+            1. You are replying to a human inside a review thread you
+               previously opened.
+            2. If the human asks for clarifications, answer directly.
+            3. If the human instructs you to fix the problem ("fix this",
+               "apply change"), generate the exact line diff replacements
+               and push a commit to the active feature branch.
+            4. You MUST NOT auto-commit unless explicitly asked.
+
+            ## Context
+            - Repository: ${{ github.repository }}
+            - Pull request: #${{ github.event.issue.number || github.event.pull_request.number }}
+            - Trigger text is in env var `OPENCODE_TRIGGER_BODY`.
+
+            ## Workflow
+            1. Read the thread history and the current diff.
+            2. Understand the human's intent from their reply.
+            3. If clarification: respond inline in the thread.
+            4. If fix request: checkout the PR branch, make the change,
+               commit with a conventional commit message, push, and
+               respond in the thread linking the commit.
+            5. If the request is ambiguous, ask for clarification.
+
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.issue.number || github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
+
+            ## Output
+            Reply to the thread via `gh api`:
+            ```bash
+            gh api --method POST \
+              /repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/replies \
+              -f body="Your response here"
+            ```
+
+      - name: Terminal — success
+        if: >-
+          steps.thread-check.outputs.is_bot_thread == 'true' &&
+          (steps.opencode.outcome == 'success' || steps.opencode2.outcome == 'success')
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-success: 'true'
+          process-label: 'Process 2 — Thread Reply'
+          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
+
+      - name: Terminal — failure
+        if: >-
+          steps.thread-check.outputs.is_bot_thread == 'true' &&
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-failure: 'true'
+          process-label: 'Process 2 — Thread Reply'
+          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
 
       - name: Propagate failure
-        if: steps.opencode.outcome == 'failure'
+        if: >-
+          steps.thread-check.outputs.is_bot_thread == 'true' &&
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
         run: exit 1
+        shell: bash
 
   process-3:
     if: needs.route.outputs.process == 'process-3'
     needs: route
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       id-token: write
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      # Acknowledge immediately
+      - name: Acknowledge
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-ack: 'true'
+          process-label: 'Process 3 — Thread Takeover'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          add-labels: 'ai:working ai:pr-comment'
 
       - name: Run opencode (Process 3 — User-owned thread takeover)
         id: opencode
@@ -265,6 +395,16 @@ jobs:
                b. From this point on, further interactions follow
                   Process 2 logic.
 
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
+
             ## Output
             Reply to the thread via `gh api`:
             ```bash
@@ -273,42 +413,124 @@ jobs:
               -f body="Your response here"
             ```
 
-      - name: React ✅ on success
-        if: steps.opencode.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || true
-
-      - name: React ❌ on failure
+      # Retry once on transient failure
+      - name: Retry pause
         if: steps.opencode.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || true
+          echo "::warning::Process 3: first attempt failed — retrying after 30s"
+          sleep 30
+        shell: bash
+
+      - name: Run opencode — retry attempt
+        id: opencode2
+        if: steps.opencode.outcome == 'failure'
+        continue-on-error: true
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
+        with:
+          model: opencode/deepseek-v4-flash-free
+          use_github_token: true
+          prompt: |
+            You are the Opencode Automated Git Agent. You are executing
+            Process 3: PR Discussion (User-Owned Thread Takeover).
+
+            ## Rules of Engagement
+            1. An authorized user invoked `/oc` in a code review thread
+               that was NOT opened by you.
+            2. You are now assuming responsibility for this thread.
+            3. If the user asks for a fix, you may push code changes.
+            4. Otherwise, you provide analysis, suggestions, or
+               clarifications inline.
+
+            ## Context
+            - Repository: ${{ github.repository }}
+            - Pull request: #${{ github.event.pull_request.number }}
+            - Trigger text is in env var `OPENCODE_TRIGGER_BODY`.
+
+            ## Workflow
+            1. Read the full thread history up to this point.
+            2. Understand the context and the user's request.
+            3. If a fix is requested:
+               a. Checkout the PR branch: `gh pr checkout ${{ github.event.pull_request.number }}`
+               b. Implement the fix.
+               c. Commit with a conventional commit message.
+               d. Push to the branch.
+               e. Reply in the thread with a summary and commit ref.
+            4. If analysis or clarification:
+               a. Reply inline in the thread.
+               b. From this point on, further interactions follow
+                  Process 2 logic.
+
+            ## Label: ai:user_request
+            If you are posting a question and CANNOT proceed without
+            human input, add the label BEFORE posting your question:
+            ```bash
+            gh pr edit ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} --add-label 'ai:user_request'
+            ```
+            Only add this label when genuinely blocked. Do NOT add it
+            for completion summaries or informational responses.
+
+            ## Output
+            Reply to the thread via `gh api`:
+            ```bash
+            gh api --method POST \
+              /repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/replies \
+              -f body="Your response here"
+            ```
+
+      - name: Terminal — success
+        if: steps.opencode.outcome == 'success' || steps.opencode2.outcome == 'success'
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-success: 'true'
+          process-label: 'Process 3 — Thread Takeover'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
+
+      - name: Terminal — failure
+        if: >-
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-failure: 'true'
+          process-label: 'Process 3 — Thread Takeover'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-comment'
 
       - name: Propagate failure
-        if: steps.opencode.outcome == 'failure'
+        if: >-
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
         run: exit 1
+        shell: bash
 
   process-6:
     if: needs.route.outputs.process == 'process-6'
     needs: route
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       id-token: write
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -319,14 +541,41 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        shell: bash
 
-      - name: Parse task arguments
+      - name: Parse task arguments (including flags)
         id: parse
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
           .github/scripts/auth.sh "$COMMENT_BODY"
+        shell: bash
+
+      # Resolve effective model: --model flag > default
+      - name: Resolve model
+        id: model
+        env:
+          FLAG_MODEL: ${{ steps.parse.outputs.FLAG_MODEL }}
+        run: |
+          MODEL="${FLAG_MODEL:-opencode/north-mini-code-free}"
+          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      # Acknowledge immediately
+      - name: Acknowledge
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-ack: 'true'
+          process-label: 'Process 6 — PR Task'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          add-labels: 'ai:working ai:pr-task'
 
       - name: Run opencode (Process 6 — PR Task Execution)
         id: opencode
@@ -337,7 +586,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TASK_ARGS: ${{ steps.parse.outputs.TASK_ARGS }}
         with:
-          model: opencode/north-mini-code-free
+          model: ${{ steps.model.outputs.model }}
           use_github_token: true
           prompt: |
             You are the Opencode Automated Git Agent. You are executing
@@ -351,7 +600,7 @@ jobs:
 
             ## Context
             - Repository: ${{ github.repository }}
-            - Pull request: #${{ github.event.pull_request.number }}
+            - Pull request: #${{ github.event.issue.number }}
             - Task arguments from the user: env var `OPENCODE_TASK_ARGS`
 
             ## Workflow
@@ -365,7 +614,7 @@ jobs:
 
             ### 2. Checkout the PR branch
             ```bash
-            gh pr checkout ${{ github.event.pull_request.number }}
+            gh pr checkout ${{ github.event.issue.number }}
             ```
 
             ### 3. Implement the task
@@ -380,20 +629,89 @@ jobs:
             git push origin HEAD
             ```
 
-            ### 5. Update the PR checklist
-            Update the PR body to flip the completed task checkbox:
-            - Change `- [ ] task description` to `- [x] task description`
-              for the task you just completed.
+            ## Hard Constraints
+            - Never expand scope beyond the stated task.
+            - Never remove or modify unrelated code.
+            - If the task is ambiguous, stop and comment asking for
+              clarification instead of guessing.
+            - Do NOT update the PR checklist or post a summary comment —
+              those are handled by subsequent scripted steps.
 
+      # Script the checklist flip (was previously AI-delegated)
+      - name: Flip checklist item
+        if: steps.opencode.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TASK_ARGS: ${{ steps.parse.outputs.TASK_ARGS }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          chmod +x .github/scripts/pr-tasks.sh 2>/dev/null || true
+          NEEDLE="${TASK_ARGS:-}"
+          TASK_DESC=$(bash .github/scripts/pr-tasks.sh check-task "$PR_NUMBER" "$NEEDLE" || true)
+          if [[ -n "$TASK_DESC" ]]; then
+            echo "::notice::Checked off: $TASK_DESC"
+          fi
+        shell: bash
+
+      # Retry once on transient failure
+      - name: Retry pause
+        if: steps.opencode.outcome == 'failure'
+        run: |
+          echo "::warning::Process 6: first attempt failed — retrying after 30s"
+          sleep 30
+        shell: bash
+
+      - name: Run opencode — retry attempt
+        id: opencode2
+        if: steps.opencode.outcome == 'failure'
+        continue-on-error: true
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a # latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENCODE_TASK_ARGS: ${{ steps.parse.outputs.TASK_ARGS }}
+        with:
+          model: ${{ steps.model.outputs.model }}
+          use_github_token: true
+          prompt: |
+            You are the Opencode Automated Git Agent. You are executing
+            Process 6: PR Task (Targeted Coding Execution).
+
+            ## Rules of Engagement
+            1. You are implementing a specific task on an active PR branch.
+            2. Write atomic, cleanly scoped commits using conventional
+               commit headers.
+            3. Verify syntax and test boundaries before pushing.
+
+            ## Context
+            - Repository: ${{ github.repository }}
+            - Pull request: #${{ github.event.issue.number }}
+            - Task arguments from the user: env var `OPENCODE_TASK_ARGS`
+
+            ## Workflow
+
+            ### 1. Determine the task
+            - If `OPENCODE_TASK_ARGS` is non-empty, use that as the
+              task description.
+            - If `OPENCODE_TASK_ARGS` is empty, parse the PR body
+              markdown. Extract the first uncompleted task matching
+              `- [ ]` and treat it as the execution objective.
+
+            ### 2. Checkout the PR branch
             ```bash
-            gh pr edit ${{ github.event.pull_request.number }} \
-              --body "<updated PR body with checked checkbox>"
+            gh pr checkout ${{ github.event.issue.number }}
             ```
 
-            ### 6. Post summary comment
+            ### 3. Implement the task
+            - Read relevant files and understand the codebase context.
+            - Implement the requested feature or fix.
+            - Verify your code compiles / passes linting.
+            - Commit with a conventional commit message (e.g.
+              `feat(scope): implement task description`).
+
+            ### 4. Push
             ```bash
-            gh pr comment ${{ github.event.pull_request.number }} \
-              --body "✅ Task completed: <description>\nCommit: <sha>"
+            git push origin HEAD
             ```
 
             ## Hard Constraints
@@ -401,31 +719,60 @@ jobs:
             - Never remove or modify unrelated code.
             - If the task is ambiguous, stop and comment asking for
               clarification instead of guessing.
+            - Do NOT update the PR checklist or post a summary comment —
+              those are handled by subsequent scripted steps.
 
-      - name: React ✅ on success
-        if: steps.opencode.outcome == 'success'
+      # Script the checklist flip on retry success
+      - name: Flip checklist item (retry)
+        if: steps.opencode2.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TASK_ARGS: ${{ steps.parse.outputs.TASK_ARGS }}
+          PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='hooray' 2>/dev/null || true
+          chmod +x .github/scripts/pr-tasks.sh 2>/dev/null || true
+          NEEDLE="${TASK_ARGS:-}"
+          TASK_DESC=$(bash .github/scripts/pr-tasks.sh check-task "$PR_NUMBER" "$NEEDLE" || true)
+          if [[ -n "$TASK_DESC" ]]; then
+            echo "::notice::Checked off: $TASK_DESC"
+          fi
+        shell: bash
 
-      - name: React ❌ on failure
-        if: steps.opencode.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api --method POST \
-            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || \
-          gh api --method POST \
-            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
-            -f content='-1' 2>/dev/null || true
+      - name: Terminal — success
+        if: steps.opencode.outcome == 'success' || steps.opencode2.outcome == 'success'
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-success: 'true'
+          process-label: 'Process 6 — PR Task'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-task'
+
+      - name: Terminal — failure
+        if: >-
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
+        uses: ./.github/actions/opencode-run
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          server-url: ${{ github.server_url }}
+          do-failure: 'true'
+          process-label: 'Process 6 — PR Task'
+          issue-number: ${{ github.event.pull_request.number }}
+          is-pull-request: 'true'
+          remove-labels: 'ai:working ai:pr-task'
 
       - name: Propagate failure
-        if: steps.opencode.outcome == 'failure'
+        if: >-
+          steps.opencode.outcome == 'failure' &&
+          (steps.opencode2.outcome == 'failure' || steps.opencode2.outcome == 'skipped')
         run: exit 1
+        shell: bash
