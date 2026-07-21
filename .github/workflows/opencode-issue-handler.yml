@@ -200,7 +200,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
-          model: opencode/north-mini-code-free
+          model: opencode/deepseek-v4-flash-free
           use_github_token: true
           prompt: |
             You are the Opencode Automated Git Agent operating inside an
