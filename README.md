@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-15 00:40 UTC**.
+> Last updated: **2026-07-21 20:37 UTC**.
 > LiveBench data: **121 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -39,11 +39,13 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `glm-5` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
 | `glm-5.1` | Go (Paid) | ✅ LiveBench | Plan, Review | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
 | `glm-5.2` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
-| `hy3-free` | Free | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
+| `grok-4.5` | Go (Paid) | ❌ Missing | — | — | — | — | — | — |
 | `hy3-preview` | Go (Paid) | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
 | `kimi-k2.5` | Go (Paid) | ✅ LiveBench | Plan, Review | 69.2 | 60.1 | 76.7 | 55.0 | 65.3 |
 | `kimi-k2.6` | Go (Paid) | ✅ LiveBench | Plan, Review | 72.4 | 66.4 | 77.9 | 58.1 | 69.7 |
 | `kimi-k2.7-code` | Go (Paid) | 📋 Fallback | Code, Impl | 58.0 | 61.0 | 55.0 | 48.0 | 58.0 |
+| `kimi-k3` | Go (Paid) | ❌ Missing | — | — | — | — | — | — |
+| `laguna-s-2.1-free` | Free | ❌ Missing | — | — | — | — | — | — |
 | `mimo-v2-omni` | Go (Paid) | 📋 Fallback | Design, Ask | 50.0 | 42.0 | 48.0 | 55.0 | 50.0 |
 | `mimo-v2-pro` | Go (Paid) | ✅ LiveBench | Plan, Review | 58.4 | 45.5 | 65.8 | 43.6 | 57.8 |
 | `mimo-v2.5` | Go (Paid) | 📋 Fallback | Ask, Triage | 62.0 | 60.0 | 64.0 | 58.0 | 65.0 |
@@ -61,7 +63,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-15 00:40 UTC**
+> Audited: **2026-07-21 20:37 UTC**
 > Workflows checked: **3**
 > OpenCode steps found: **6**
 

@@ -1,4 +1,17 @@
 {
   "stale_fallback": [],
-  "missing_scores": []
+  "missing_scores": [
+    {
+      "model": "grok-4.5",
+      "tier": "Go (Paid)"
+    },
+    {
+      "model": "kimi-k3",
+      "tier": "Go (Paid)"
+    },
+    {
+      "model": "laguna-s-2.1-free",
+      "tier": "Free"
+    }
+  ]
 }

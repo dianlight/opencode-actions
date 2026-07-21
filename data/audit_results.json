@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-07-15T00:40:30.127321+00:00",
+  "timestamp": "2026-07-21T20:37:11.391858+00:00",
   "livebench_snapshot": "2026_01_08",
   "livebench_source": "https://livebench.ai/table_2026_01_08.csv",
   "livebench_models": 121,
   "free_models": 5,
-  "go_models": 20,
+  "go_models": 22,
   "workflows_audited": 3,
   "steps_audited": 6,
   "results": [
