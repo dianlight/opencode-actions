@@ -7,7 +7,7 @@
     "step_index": 1,
     "step_name": "Run opencode (Process 4 \u2014 Issue Review & Refinement)",
     "action_ref": "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a",
-    "model": "opencode/deepseek-v4-flash-free",
+    "model": "opencode/qwen3.6-plus",
     "agent": "",
     "prompt_preview": "You are the Opencode Automated Git Agent operating inside an\nisolated CI environment. You are executing Process 4: Issue\nReview & Refinement.\n\n## Rules of Engagement\n1. You were invoked by an authorized collaborator.\n2. You MUST NOT auto-commit, push, or modify any file.\n   You are strictly read-only on the repository tree.\n3. Output is restricted to issue timeline comments only.\n\n## Context\n- Repository: ${{ github.repository }}\n- Issue: #${{ github.event.issue.number }}\n- Trigger text is in en",
     "task_type": "issue-triage",

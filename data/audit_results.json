@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-22T00:44:48.608041+00:00",
+  "timestamp": "2026-07-22T14:27:43.240506+00:00",
   "livebench_snapshot": "2026_01_08",
   "livebench_source": "https://livebench.ai/table_2026_01_08.csv",
   "livebench_models": 121,
@@ -14,12 +14,12 @@
       "job": "process-4",
       "step": "Run opencode (Process 4 \u2014 Issue Review & Refinement)",
       "task_type": "issue-triage",
-      "current_model": "opencode/deepseek-v4-flash-free",
+      "current_model": "opencode/qwen3.6-plus",
       "recommended_free": "deepseek-v4-flash-free",
       "recommended_go": "qwen3.7-max",
       "preferred_tier": "go",
       "preferred_diff": 10,
-      "status": "\u2705"
+      "status": "\u274c"
     },
     {
       "file": ".github/workflows/opencode-issue-handler.yml",
@@ -29,9 +29,9 @@
       "task_type": "issue-implementation",
       "current_model": "opencode/deepseek-v4-flash-free",
       "recommended_free": "deepseek-v4-flash-free",
-      "recommended_go": "kimi-k2.6",
+      "recommended_go": "kimi-k3",
       "preferred_tier": "go",
-      "preferred_diff": 15,
+      "preferred_diff": 25,
       "status": "\u2705"
     },
     {
@@ -68,10 +68,10 @@
       "task_type": "code-implementation",
       "current_model": "opencode/kimi-k2.6",
       "recommended_free": "deepseek-v4-flash-free",
-      "recommended_go": "kimi-k2.6",
+      "recommended_go": "kimi-k3",
       "preferred_tier": "go",
-      "preferred_diff": 15,
-      "status": "\u2705"
+      "preferred_diff": 25,
+      "status": "\u274c"
     },
     {
       "file": ".github/workflows/opencode-pr-review.yml",

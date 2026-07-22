@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-22 00:44 UTC**.
+> Last updated: **2026-07-22 14:27 UTC**.
 > LiveBench data: **121 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -19,14 +19,14 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 |-----------|-------------|----------------|-----------|-----------------|------------|---------------|----------|
 | `Plan` | Planning, architecture decisions, task decomposition | `gpt-5.5` | 89.5 | `deepseek-v4-flash-free` | 73.1 | 🏆 `deepseek-v4-pro` | 83.9 |
 | `Ask` | General Q&A, explanations, analysis | `gemini-3.1-pro` | 79.6 | `deepseek-v4-flash-free` | 69.4 | 🏆 `qwen3.7-max` | 76.6 |
-| `Code` | Code generation, implementation, refactoring | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k2.6` | 66.4 |
+| `Code` | Code generation, implementation, refactoring | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k3` | 72.0 |
 | `issue-triage` | Triage, label, categorize, route issues | `gemini-3.1-pro` | 79.6 | `deepseek-v4-flash-free` | 69.4 | 🏆 `qwen3.7-max` | 76.6 |
-| `issue-implementation` | Implement, fix, resolve issues | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k2.6` | 66.4 |
+| `issue-implementation` | Implement, fix, resolve issues | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k3` | 72.0 |
 | `pr-review` | Review PRs, pull requests, diffs | `gpt-5.5` | 89.5 | `deepseek-v4-flash-free` | 73.1 | 🏆 `deepseek-v4-pro` | 83.9 |
-| `code-implementation` | Generate code, refactor, implement features | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k2.6` | 66.4 |
+| `code-implementation` | Generate code, refactor, implement features | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k3` | 72.0 |
 | `frontend-design` | UI design, components, layouts, mockups | `gpt-5.5` | 76.3 | `mimo-v2.5-free` | 54.0 | 🏆 `glm-5.2` | 63.6 |
-| `frontend-testing` | Playwright, Cypress, E2E, frontend tests | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k2.6` | 66.4 |
-| `api-testing` | API testing, integration tests, OpenAPI, Postman | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k2.6` | 66.4 |
+| `frontend-testing` | Playwright, Cypress, E2E, frontend tests | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k3` | 72.0 |
+| `api-testing` | API testing, integration tests, OpenAPI, Postman | `claude-opus-4-7` | 70.3 | `deepseek-v4-flash-free` | 57.7 | 🏆 `kimi-k3` | 72.0 |
 | `other` | Everything else | `gemini-3.1-pro` | 80.7 | `deepseek-v4-flash-free` | 67.7 | 🏆 `qwen3.7-max` | 75.2 |
 
 ### LiveBench Score Reference
@@ -39,13 +39,13 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `glm-5` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
 | `glm-5.1` | Go (Paid) | ✅ LiveBench | Plan, Review | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
 | `glm-5.2` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
-| `grok-4.5` | Go (Paid) | ❌ Missing | — | — | — | — | — | — |
+| `grok-4.5` | Go (Paid) | 📋 Fallback | Code, Impl | 54.0 | 65.0 | 58.0 | 30.0 | 60.0 |
 | `hy3-preview` | Go (Paid) | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
 | `kimi-k2.5` | Go (Paid) | ✅ LiveBench | Plan, Review | 69.2 | 60.1 | 76.7 | 55.0 | 65.3 |
 | `kimi-k2.6` | Go (Paid) | ✅ LiveBench | Plan, Review | 72.4 | 66.4 | 77.9 | 58.1 | 69.7 |
 | `kimi-k2.7-code` | Go (Paid) | 📋 Fallback | Code, Impl | 58.0 | 61.0 | 55.0 | 48.0 | 58.0 |
-| `kimi-k3` | Go (Paid) | ❌ Missing | — | — | — | — | — | — |
-| `laguna-s-2.1-free` | Free | ❌ Missing | — | — | — | — | — | — |
+| `kimi-k3` | Go (Paid) | 📋 Fallback | Code, Impl | 57.0 | 72.0 | 70.0 | 60.0 | 68.0 |
+| `laguna-s-2.1-free` | Free | 📋 Fallback | Ask, Triage | 45.0 | 52.0 | 48.0 | 40.0 | 54.0 |
 | `mimo-v2-omni` | Go (Paid) | 📋 Fallback | Design, Ask | 50.0 | 42.0 | 48.0 | 55.0 | 50.0 |
 | `mimo-v2-pro` | Go (Paid) | ✅ LiveBench | Plan, Review | 58.4 | 45.5 | 65.8 | 43.6 | 57.8 |
 | `mimo-v2.5` | Go (Paid) | 📋 Fallback | Ask, Triage | 62.0 | 60.0 | 64.0 | 58.0 | 65.0 |
@@ -63,17 +63,17 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-22 00:44 UTC**
+> Audited: **2026-07-22 14:27 UTC**
 > Workflows checked: **3**
 > OpenCode steps found: **6**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|-----------------|------------------|----------------|--------|
-| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode/deepseek-v4-flash-free` | `gemini-3.1-pro` (+15%) | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ✅ |
-| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode/deepseek-v4-flash-free` | `claude-opus-4-7` (+22%) | `deepseek-v4-flash-free` | 🏆 `kimi-k2.6` (+15%) | ✅ |
+| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode/qwen3.6-plus` | `gemini-3.1-pro` (+18%) | `deepseek-v4-flash-free` | 🏆 `qwen3.7-max` (+10%) | ❌ |
+| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode/deepseek-v4-flash-free` | `claude-opus-4-7` (+22%) | `deepseek-v4-flash-free` | 🏆 `kimi-k3` (+25%) | ✅ |
 | `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` (+22%) | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
 | `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` (+22%) | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
-| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `code-implementation` | `opencode/kimi-k2.6` | `claude-opus-4-7` (+6%) | `deepseek-v4-flash-free` | 🏆 `kimi-k2.6` (+15%) | ✅ |
+| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `code-implementation` | `opencode/kimi-k2.6` | `claude-opus-4-7` (+6%) | `deepseek-v4-flash-free` | 🏆 `kimi-k3` (+25%) | ❌ |
 | `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `gpt-5.5` (+22%) | `deepseek-v4-flash-free` | 🏆 `deepseek-v4-pro` (+15%) | ✅ |
 
 _Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). 🏆 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._
