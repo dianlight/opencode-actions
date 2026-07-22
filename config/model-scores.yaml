@@ -53,3 +53,23 @@ model_scores:
     overall: 58.0
     reasoning: 55.0
     vision: 48.0
+  kimi-k3:
+    coding: 72.0
+    instruction_following: 68.0
+    overall: 57.0
+    reasoning: 70.0
+    vision: 60.0
+  grok-4.5:
+    coding: 65.0
+    instruction_following: 60.0
+    overall: 54.0
+    reasoning: 58.0
+    vision: 30.0
+  laguna-s-2.1-free:
+    coding: 52.0
+    instruction_following: 54.0
+    overall: 45.0
+    reasoning: 48.0
+    vision: 40.0
+
+    
