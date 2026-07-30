@@ -22,7 +22,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
-# ─── Paths ───────────────────────────────────────────────────────────────────
+# --- Paths ---
 ROOT = Path(__file__).parent.parent
 CONFIG_DIR = ROOT / "config"
 DATA_DIR = ROOT / "data"
@@ -31,6 +31,7 @@ README_PATH = ROOT / "README.md"
 
 TASK_TYPES_PATH = CONFIG_DIR / "task-types.yaml"
 WORKFLOW_MAP_PATH = CONFIG_DIR / "workflow-task-map.yaml"
+MODEL_SCORES_PATH = CONFIG_DIR / "model-scores.yaml"
 
 # Data files
 ZEN_MODELS_PATH = DATA_DIR / "zen_models.json"
@@ -40,7 +41,7 @@ WORKFLOW_SCAN_PATH = DATA_DIR / "workflow_scan.json"
 AUDIT_RESULTS_PATH = DATA_DIR / "audit_results.json"
 COVERAGE_ISSUES_PATH = DATA_DIR / "coverage_issues.json"
 
-# ─── Constants ────────────────────────────────────────────────────────────────
+# --- Constants ---
 ZEN_URL = "https://opencode.ai/zen/v1/models"
 GO_URL = "https://opencode.ai/zen/go/v1/models"
 LIVEBENCH_BASE = "https://livebench.ai"
@@ -124,7 +125,75 @@ def _get_fallback_scores() -> dict:
     return _FALLBACK_CACHE
 
 
-# ─── Utils ────────────────────────────────────────────────────────────────────
+# Token consumption multipliers cache
+_TOKEN_MULTIPLIER_CACHE = None
+
+
+def get_token_multiplier(model_name: str) -> float:
+    """Get token consumption multiplier for a model (default 1.0 = normal).
+
+    Some models (e.g. kimi-k3) consume tokens at a higher rate (x2) due to
+    internal architecture. This is set manually in config/model-scores.yaml
+    under the `token_multipliers` key.
+    """
+    global _TOKEN_MULTIPLIER_CACHE
+    if _TOKEN_MULTIPLIER_CACHE is None:
+        config = load_yaml(MODEL_SCORES_PATH)
+        _TOKEN_MULTIPLIER_CACHE = config.get("token_multipliers", {}) or {}
+    name = _normalise_model_for_lookup(model_name)
+    return _TOKEN_MULTIPLIER_CACHE.get(name, 1.0)
+
+
+def has_token_multiplier(model_name: str) -> bool:
+    """Check if a model has a token consumption multiplier > 1."""
+    return get_token_multiplier(model_name) > 1.0
+
+
+def format_model_with_score(
+    model_id: Optional[str],
+    score: Optional[float],
+    *,
+    show_multiplier: bool = True,
+    alt_model_id: Optional[str] = None,
+    alt_score: Optional[float] = None,
+    score_suffix: str = "",
+) -> str:
+    """Format a model cell as "Model (score)" with optional multiplier warning and alt.
+
+    If score_suffix is provided (e.g. "+15%"), it's appended after the score.
+    If the model has a token multiplier > 1, an "xN" badge is shown.
+    If alt_model_id is given, the cell also shows "alt: alt_model (alt_score)".
+    """
+    if not model_id:
+        return "\u2014"
+    cell = f"`{model_id}` ({score}{score_suffix})" if score is not None else f"`{model_id}`"
+    if show_multiplier and has_token_multiplier(model_id):
+        mult = get_token_multiplier(model_id)
+        cell += f" \u26a0\ufe0f x{mult}"
+        if alt_model_id:
+            # alt_score already includes any suffix (caller bakes it in)
+            alt_str = f"`{alt_model_id}` ({alt_score})" if alt_score is not None else f"`{alt_model_id}`"
+            cell += f" \u00b7 alt: {alt_str}"
+    return cell
+
+
+def _find_best_without_multiplier(
+    scored_list: list,
+) -> Optional[tuple]:
+    """From a scored list (sorted best-first), find the first entry without token multiplier.
+
+    scored_list items: (model_id, ...) — any extra fields are ignored.
+    Returns (model_id, score) or None.
+    """
+    for entry in scored_list:
+        model_id = entry[0]
+        score = entry[-1]
+        if not has_token_multiplier(model_id):
+            return (model_id, score)
+    return None
+
+
+# --- Utils ---
 def fetch_json(url: str, timeout: int = 15) -> Optional[dict]:
     """Fetch JSON from URL with timeout."""
     try:
@@ -132,7 +201,7 @@ def fetch_json(url: str, timeout: int = 15) -> Optional[dict]:
         with urlopen(req, timeout=timeout) as resp:
             return json.load(resp)
     except (URLError, HTTPError, json.JSONDecodeError, TimeoutError) as e:
-        print(f"  ✗ Failed to fetch {url}: {e}")
+        print(f"  x Failed to fetch {url}: {e}")
         return None
 
 
@@ -143,7 +212,7 @@ def fetch_text(url: str, timeout: int = 15) -> Optional[str]:
         with urlopen(req, timeout=timeout) as resp:
             return resp.read().decode("utf-8")
     except (URLError, HTTPError, TimeoutError) as e:
-        print(f"  ✗ Failed to fetch {url}: {e}")
+        print(f"  x Failed to fetch {url}: {e}")
         return None
 
 
@@ -194,7 +263,7 @@ def parse_livebench_csv(csv_text: str) -> dict:
                 subscores["overall"] = round(sum(all_values) / len(all_values), 1)
                 result[model] = subscores
     except Exception as e:
-        print(f"  ✗ CSV parse error: {e}")
+        print(f"  x CSV parse error: {e}")
     return result
 
 
@@ -214,31 +283,31 @@ def load_json(path: Path) -> Any:
         return json.load(f)
 
 
-# ─── Model Fetching ──────────────────────────────────────────────────────────
+# --- Model Fetching ---
 def fetch_opencode_models() -> tuple:
     """Fetch Zen (free) and Go (paid) model catalogs."""
-    print("→ Fetching OpenCode model catalogs...")
+    print("-> Fetching OpenCode model catalogs...")
 
     # Fetch Zen models (all), filter free
     zen_data = fetch_json(ZEN_URL)
     if not zen_data:
-        print("  ✗ Failed to fetch Zen models")
+        print("  x Failed to fetch Zen models")
         return [], []
 
     all_zen = zen_data.get("data", [])
     free_models = [m for m in all_zen if m.get("id", "").endswith("-free")]
     save_json(ZEN_MODELS_PATH, {"all": all_zen, "free": free_models})
-    print(f"  ✓ Zen: {len(all_zen)} total, {len(free_models)} free")
+    print(f"  v Zen: {len(all_zen)} total, {len(free_models)} free")
 
     # Fetch Go models (paid)
     go_data = fetch_json(GO_URL)
     if not go_data:
-        print("  ✗ Failed to fetch Go models")
+        print("  x Failed to fetch Go models")
         go_models = []
     else:
         go_models = go_data.get("data", [])
         save_json(GO_MODELS_PATH, {"data": go_models})
-        print(f"  ✓ Go: {len(go_models)} paid models")
+        print(f"  v Go: {len(go_models)} paid models")
 
     return free_models, go_models
 
@@ -267,11 +336,11 @@ def fetch_livebench() -> dict:
     (https://github.com/LiveBench/LiveBench/blob/main/changelog.md), then the
     corresponding `https://livebench.ai/table_YYYY_MM_DD.csv` is fetched.
     """
-    print("→ Fetching LiveBench leaderboard...")
+    print("-> Fetching LiveBench leaderboard...")
 
     date_str = get_latest_livebench_date()
     if date_str:
-        print(f"  ✓ Latest LiveBench snapshot from changelog: {date_str}")
+        print(f"  v Latest LiveBench snapshot from changelog: {date_str}")
         csv_text = fetch_livebench_csv(date_str)
         if csv_text:
             scores = parse_livebench_csv(csv_text)
@@ -282,11 +351,11 @@ def fetch_livebench() -> dict:
                     "models": scores,
                 }
                 save_json(LIVEBENCH_PATH, result)
-                print(f"  ✓ LiveBench CSV ({date_str}): {len(scores)} models parsed")
+                print(f"  v LiveBench CSV ({date_str}): {len(scores)} models parsed")
                 return result
 
     # Fallback to JSON endpoints (older format, may not exist)
-    print("  ⚠ CSV fetch failed, trying JSON fallbacks...")
+    print("  w CSV fetch failed, trying JSON fallbacks...")
     for url in LIVEBENCH_JSON_URLS:
         data = fetch_json(url)
         if data:
@@ -348,18 +417,18 @@ def fetch_livebench() -> dict:
 
             if cleaned:
                 save_json(LIVEBENCH_PATH, {"_source": url, "models": cleaned})
-                print(f"  ✓ LiveBench JSON: {len(cleaned)} models parsed")
+                print(f"  v LiveBench JSON: {len(cleaned)} models parsed")
                 return {"_source": url, "models": cleaned}
 
-    print("  ⚠ No LiveBench data available, using empty scores")
+    print("  w No LiveBench data available, using empty scores")
     save_json(LIVEBENCH_PATH, {"models": {}})
     return {"models": {}}
 
 
-# ─── Workflow Scanning ───────────────────────────────────────────────────────
+# --- Workflow Scanning ---
 def scan_workflows() -> list:
     """Scan all workflows for anomalyco/opencode usage."""
-    print("→ Scanning workflows for OpenCode usage...")
+    print("-> Scanning workflows for OpenCode usage...")
 
     results = []
     if not WORKFLOWS_DIR.exists():
@@ -445,7 +514,7 @@ def scan_workflows() -> list:
             )
 
     save_json(WORKFLOW_SCAN_PATH, results)
-    print(f"  ✓ Found {len(results)} OpenCode step(s) across workflows")
+    print(f"  v Found {len(results)} OpenCode step(s) across workflows")
     return results
 
 
@@ -463,7 +532,7 @@ def classify_task_type(
     return "other"
 
 
-# ─── Scoring & Recommendations ───────────────────────────────────────────────
+# --- Scoring & Recommendations ---
 # LiveBench data is stored as {"models": {name: {subscores...}}, "_source": ...}
 # This helper unwraps it for the scoring functions.
 def _lb_models(livebench: dict) -> dict:
@@ -478,10 +547,15 @@ def _lb_models(livebench: dict) -> dict:
 def _normalise_model_for_lookup(model_name: str) -> str:
     """Normalise a model name for LiveBench lookup.
 
-    OpenCode free models carry a `-free` suffix that LiveBench doesn't use, so we
-    strip it. Also normalise case and trim whitespace.
+    Strips the provider prefix (e.g. `opencode/`, `opencode-go/`) and the `-free`
+    suffix that OpenCode uses for free-tier variants but LiveBench doesn't include.
+    Also normalises case and trims whitespace.
     """
     name = model_name.strip().lower()
+    # Strip provider prefix (e.g. opencode/deepseek-v4-flash -> deepseek-v4-flash)
+    if "/" in name and not name.startswith("http"):
+        name = name.rsplit("/", 1)[-1]
+    # Strip -free suffix (OpenCode free version indicator, not part of model name)
     if name.endswith("-free"):
         name = name[:-5]
     return name
@@ -759,9 +833,9 @@ def _strip_model_prefix(model: str) -> str:
 def classify_model_status(
     current: str, recommended_free: str, recommended_go: str
 ) -> str:
-    """Classify model status: ✅ Optimal, ⚠️ Suboptimal, ❌ Wrong."""
+    """Classify model status: Optimal, Suboptimal, Wrong."""
     if not current or current == "NOT_SET":
-        return "❌"
+        return "\u274c"
 
     # Normalize model names for comparison (strip opencode/ prefix, lowercase)
     curr = _strip_model_prefix(current).lower().strip()
@@ -775,20 +849,20 @@ def classify_model_status(
     )
 
     if curr == rec_free or curr == rec_go:
-        return "✅"
+        return "\u2705"
 
     # Check if current is a paid model when free equivalent exists
     is_paid = not curr.endswith("-free")
     if is_paid and rec_free and rec_free != rec_go:
-        return "❌"  # Paying when free is recommended
+        return "\u274c"  # Paying when free is recommended
 
-    return "⚠️"  # Suboptimal but not wrong
-
-
-# ─── README Generation ───────────────────────────────────────────────────────
+    return "\u26a0\ufe0f"  # Suboptimal but not wrong
 
 
-# ─── Coverage Checks ──────────────────────────────────────────────────────────
+# --- README Generation ---
+
+
+# --- Coverage Checks ---
 def detect_coverage_issues(free_models: list, go_models: list, livebench: dict) -> dict:
     """Detect stale fallback entries and models missing scores entirely.
 
@@ -845,7 +919,8 @@ def generate_model_recommendation_table(
 ) -> str:
     """Generate the task-type model recommendation table.
 
-    Columns: Task Type | Description | Best Zen Model | Zen Score | Best Free Model | Free Score | Best Go Model | Go Score
+    Columns: Task Type | Description | Best Zen | Best Free | Best Go
+    Each cell shows "Model (score)" with optional multiplier warning and alt model.
     """
     models = _lb_models(livebench)
     snapshot_date = (
@@ -868,13 +943,14 @@ def generate_model_recommendation_table(
         [
             f"> Free-first threshold: **{threshold_pct}%**.",
             "",
-            "| Task Type | Description | Best Zen Model | Zen Score | Best Free Model | Free Score | Best Go Model | Go Score |",
-            "|-----------|-------------|----------------|-----------|-----------------|------------|---------------|----------|",
+            "| Task Type | Description | Best Zen | Best Free | Best Go |",
+            "|-----------|-------------|----------|-----------|---------|",
         ]
     )
     lines = header_lines
 
     all_zen = zen_models if zen_models else []
+    go_ids = set(m["id"] for m in go_models)
 
     for tt in task_types:
         name = tt["name"]
@@ -898,35 +974,77 @@ def generate_model_recommendation_table(
         )
         go_score = get_model_score(best_go, livebench, priority) if best_go else None
 
-        zen_score_str = str(zen_score) if zen_score is not None else "—"
-        free_score_str = str(free_score) if free_score is not None else "—"
-        go_score_str = str(go_score) if go_score is not None else "—"
-        zen_model_str = f"`{zen_id}`" if zen_id else "—"
-        free_model_str = f"`{best_free}`" if best_free else "—"
-        go_model_str = f"`{best_go}`" if best_go else "—"
+        # Build scored lists (sorted best-first) for finding alts without multiplier
+        zen_scored = []
+        for m in all_zen:
+            s = get_model_score(m["id"], livebench, priority)
+            if s is not None:
+                zen_scored.append((m["id"], s))
+        zen_scored.sort(key=lambda x: x[1], reverse=True)
+
+        free_scored = []
+        for m in free_models:
+            s = get_model_score(m["id"], livebench, priority)
+            if s is not None:
+                free_scored.append((m["id"], s))
+        free_scored.sort(key=lambda x: x[1], reverse=True)
+
+        go_scored = []
+        for m in all_zen:
+            if m["id"] not in go_ids:
+                continue
+            s = get_model_score(m["id"], livebench, priority)
+            if s is not None:
+                go_scored.append((m["id"], s))
+        go_scored.sort(key=lambda x: x[1], reverse=True)
+
+        # Find alt without multiplier for each column
+        zen_alt = _find_best_without_multiplier(zen_scored) if has_token_multiplier(zen_id) else None
+        free_alt = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
+        go_alt = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
 
         # Highlight the winner based on free-first policy
-        # Winner gets 🏆 emoji, but both columns should show their models
+        # Winner gets trophy emoji
         if best_free and best_go and best_free == best_go:
             # Same model (free model wins due to free-first rule)
-            free_model_str = f"🏆 `{best_free}`"
-            go_model_str = f"`{best_go}`"
+            free_display = "\U0001f3c6 " + format_model_with_score(
+                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                alt_score=free_alt[1] if free_alt else None,
+            )
+            go_display = format_model_with_score(best_go, go_score)
         elif best_go and best_free:
             # Different models - go model wins (free wasn't within threshold)
-            free_model_str = f"`{best_free}`"
-            go_model_str = f"🏆 `{best_go}`"
+            free_display = format_model_with_score(
+                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                alt_score=free_alt[1] if free_alt else None,
+            )
+            go_display = "\U0001f3c6 " + format_model_with_score(
+                best_go, go_score, alt_model_id=go_alt[0] if go_alt else None,
+                alt_score=go_alt[1] if go_alt else None,
+            )
         elif best_go:
-            free_model_str = "—"
-            go_model_str = f"🏆 `{best_go}`"
+            free_display = "\u2014"
+            go_display = "\U0001f3c6 " + format_model_with_score(
+                best_go, go_score, alt_model_id=go_alt[0] if go_alt else None,
+                alt_score=go_alt[1] if go_alt else None,
+            )
         elif best_free:
-            free_model_str = f"🏆 `{best_free}`"
-            go_model_str = "—"
+            free_display = "\U0001f3c6 " + format_model_with_score(
+                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                alt_score=free_alt[1] if free_alt else None,
+            )
+            go_display = "\u2014"
         else:
-            free_model_str = "—"
-            go_model_str = "—"
+            free_display = "\u2014"
+            go_display = "\u2014"
+
+        zen_display = format_model_with_score(
+            zen_id, zen_score, alt_model_id=zen_alt[0] if zen_alt else None,
+            alt_score=zen_alt[1] if zen_alt else None,
+        )
 
         lines.append(
-            f"| `{name}` | {desc} | {zen_model_str} | {zen_score_str} | {free_model_str} | {free_score_str} | {go_model_str} | {go_score_str} |"
+            f"| `{name}` | {desc} | {zen_display} | {free_display} | {go_display} |"
         )
 
     return "\n".join(lines)
@@ -944,6 +1062,7 @@ def generate_score_reference_table(
     Adds a "Best For" column that shows which task type each model is
     best suited for, based on its highest-scoring subscore relative to
     task-type priorities. Uses emoji badges for visual distinction.
+    Includes a "Token Mult" column for token consumption.
     """
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
 
@@ -981,19 +1100,23 @@ def generate_score_reference_table(
         "",
         "### LiveBench Score Reference",
         "",
-        "| Model | Tier | Source | Best For | Overall | Coding | Reasoning | Vision | Instruction Following |",
-        "|-------|------|--------|----------|---------|--------|-----------|--------|----------------------|",
+        "| Model | Tier | Source | Best For | Token Mult | Overall | Coding | Reasoning | Vision | Instruction Following |",
+        "|-------|------|--------|----------|------------|---------|--------|-----------|--------|----------------------|",
     ]
 
     for model_id in sorted(all_model_ids):
         tier = "Free" if model_id.endswith("-free") else "Go (Paid)"
         source = get_model_source(model_id, livebench)
         if source == "livebench":
-            src_icon = "✅ LiveBench"
+            src_icon = "v LiveBench"
         elif source == "fallback":
-            src_icon = "📋 Fallback"
+            src_icon = "f Fallback"
         else:
-            src_icon = "❌ Missing"
+            src_icon = "x Missing"
+
+        # Token multiplier
+        mult = get_token_multiplier(model_id)
+        mult_cell = f"\u26a0\ufe0f x{mult}" if mult > 1.0 else "\u2014"
 
         # Best-for badges
         tasks = best_for_map.get(model_id, [])
@@ -1001,7 +1124,7 @@ def generate_score_reference_table(
             badges = ", ".join(TASK_BADGES.get(t) or t for t in tasks)
             best_for_cell = badges
         else:
-            best_for_cell = "—"
+            best_for_cell = "\u2014"
 
         ov = get_model_score(model_id, livebench, "overall")
         cd = get_model_score(model_id, livebench, "coding")
@@ -1009,10 +1132,10 @@ def generate_score_reference_table(
         vs = get_model_score(model_id, livebench, "vision")
         if_ = get_model_score(model_id, livebench, "instruction_following")
         lines.append(
-            f"| `{model_id}` | {tier} | {src_icon} | {best_for_cell} | "
-            f"{ov if ov is not None else '—'} | {cd if cd is not None else '—'} | "
-            f"{re_s if re_s is not None else '—'} | {vs if vs is not None else '—'} | "
-            f"{if_ if if_ is not None else '—'} |"
+            f"| `{model_id}` | {tier} | {src_icon} | {best_for_cell} | {mult_cell} | "
+            f"{ov if ov is not None else '\u2014'} | {cd if cd is not None else '\u2014'} | "
+            f"{re_s if re_s is not None else '\u2014'} | {vs if vs is not None else '\u2014'} | "
+            f"{if_ if if_ is not None else '\u2014'} |"
         )
 
     return "\n".join(lines)
@@ -1029,14 +1152,18 @@ def generate_workflow_audit_table(
 ) -> str:
     """Generate the workflow audit table with status icons.
 
-    Columns: Workflow | Job | Step | Task Type | Current Model | Recommended Zen (+XX%) | Recommended Free | Recommended Go | Status
+    Columns: Workflow | Job | Step | Task Type | Current Model |
+    Recommended Zen (+XX%) | Recommended Free | Recommended Go | Status
     The "Recommended Zen" column shows the best Zen model with percentage
     difference vs current model as suffix (e.g., `model (+15%)`).
+    If a recommended model has a token multiplier, also shows the best
+    model without multiplier as alt.
     """
     if not scan_results:
         return "\n## Workflow Model Audit\n\n> No OpenCode workflows found (excluding maintenance workflow).\n"
 
     all_zen = zen_models if zen_models else []
+    go_ids = set(m["id"] for m in go_models)
 
     lines = [
         "",
@@ -1053,7 +1180,7 @@ def generate_workflow_audit_table(
     for r in scan_results:
         if "error" in r:
             lines.append(
-                f"| `{r['file']}` | — | — | `parse-error` | — | — | — | — | — | ❌ Parse Error |"
+                f"| `{r['file']}` | \u2014 | \u2014 | `parse-error` | \u2014 | \u2014 | \u2014 | \u2014 | \u274c Parse Error |"
             )
             continue
 
@@ -1084,15 +1211,69 @@ def generate_workflow_audit_table(
             _strip_model_prefix(current), livebench, priority
         )
 
-        zen_display = f"`{zen_id}`" if zen_id else "—"
+        zen_display = f"`{zen_id}`" if zen_id else "\u2014"
         zen_suffix = ""
         if zen_id and zen_score is not None and current_score is not None and current_score > 0:
             zen_pct = ((zen_score - current_score) / current_score) * 100
             if abs(zen_pct) >= 0.5:
                 zen_suffix = f" (+{zen_pct:.0f}%)" if zen_pct > 0 else f" ({zen_pct:.0f}%)"
             else:
-                zen_suffix = " (≈0%)"
-        zen_display = f"{zen_display}{zen_suffix}" if zen_id else "—"
+                zen_suffix = " (0%)"
+
+        # Build scored lists for finding alts without multiplier
+        zen_scored = []
+        for m in all_zen:
+            s = get_model_score(m["id"], livebench, priority)
+            if s is not None:
+                zen_scored.append((m["id"], s))
+        zen_scored.sort(key=lambda x: x[1], reverse=True)
+
+        free_scored = []
+        for m in free_models:
+            s = get_model_score(m["id"], livebench, priority)
+            if s is not None:
+                free_scored.append((m["id"], s))
+        free_scored.sort(key=lambda x: x[1], reverse=True)
+
+        go_scored = []
+        for m in all_zen:
+            if m["id"] not in go_ids:
+                continue
+            s = get_model_score(m["id"], livebench, priority)
+            if s is not None:
+                go_scored.append((m["id"], s))
+        go_scored.sort(key=lambda x: x[1], reverse=True)
+
+        # Compute Zen cell with multiplier awareness
+        zen_alt = _find_best_without_multiplier(zen_scored)
+        # For Zen column, we need % diff for alt too
+        zen_alt_info = None
+        if zen_alt and has_token_multiplier(zen_id):
+            alt_id, alt_score = zen_alt
+            zen_alt_suffix = ""
+            if alt_score is not None and current_score is not None and current_score > 0:
+                alt_pct = ((alt_score - current_score) / current_score) * 100
+                if abs(alt_pct) >= 0.5:
+                    zen_alt_suffix = f" (+{alt_pct:.0f}%)" if alt_pct > 0 else f" ({alt_pct:.0f}%)"
+                else:
+                    zen_alt_suffix = " (0%)"
+            zen_alt_info = (alt_id, alt_score, zen_alt_suffix)
+
+        # Format Zen cell
+        if zen_id:
+            zen_score_part = f"{zen_score}{zen_suffix}"
+            if has_token_multiplier(zen_id) and zen_alt_info:
+                alt_id, alt_score, alt_suf = zen_alt_info
+                zen_display = format_model_with_score(
+                    zen_id, zen_score, score_suffix=zen_suffix,
+                    alt_model_id=alt_id, alt_score=f"{alt_score}{alt_suf}",
+                )
+            else:
+                zen_display = format_model_with_score(
+                    zen_id, zen_score, score_suffix=zen_suffix,
+                )
+        else:
+            zen_display = "\u2014"
 
         status = classify_model_status(current, best_free, best_go)
 
@@ -1117,19 +1298,44 @@ def generate_workflow_audit_table(
             if abs(pct) >= 1:
                 diff_str = f" (+{pct:.0f}%)" if pct > 0 else f" ({pct:.0f}%)"
 
+        # Alt for free and go recommendations
+        free_alt = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
+        go_alt = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
+        # For free/go alt scores, bake diff_str in since format_model_with_score
+        # no longer appends score_suffix to alt_score (avoids double-suffix)
+        go_alt_score_baked = f"{go_alt[1]}{diff_str}" if go_alt and diff_str else (go_alt[1] if go_alt else None)
+        free_alt_score_baked = f"{free_alt[1]}{diff_str}" if free_alt and diff_str else (free_alt[1] if free_alt else None)
+
         # Add trophy icon to the recommended model that is preferred
         if best_free and best_go and best_free == best_go:
             # Same model - show in both columns with trophy on free (preferred)
-            free_display = f"\U0001f3c6 `{best_free}`"
-            go_display = f"`{best_go}`"
+            free_display = "\U0001f3c6 " + format_model_with_score(
+                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                alt_score=free_alt[1] if free_alt else None,
+            )
+            go_display = format_model_with_score(best_go, go_score)
         elif best_go and best_free:
-            free_display = f"`{best_free}`"
-            go_display = f"\U0001f3c6 `{best_go}`{diff_str}"
+            free_display = format_model_with_score(
+                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                alt_score=free_alt_score_baked if free_alt else None,
+            )
+            go_display = "\U0001f3c6 " + format_model_with_score(
+                best_go, go_score, score_suffix=diff_str,
+                alt_model_id=go_alt[0] if go_alt else None,
+                alt_score=go_alt_score_baked if go_alt else None,
+            )
         elif best_go:
             free_display = "\u2014"
-            go_display = f"\U0001f3c6 `{best_go}`{diff_str}"
+            go_display = "\U0001f3c6 " + format_model_with_score(
+                best_go, go_score, score_suffix=diff_str,
+                alt_model_id=go_alt[0] if go_alt else None,
+                alt_score=go_alt_score_baked if go_alt else None,
+            )
         elif best_free:
-            free_display = f"\U0001f3c6 `{best_free}`"
+            free_display = "\U0001f3c6 " + format_model_with_score(
+                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                alt_score=free_alt_score_baked if free_alt else None,
+            )
             go_display = "\u2014"
         else:
             free_display = "\u2014"
@@ -1139,15 +1345,6 @@ def generate_workflow_audit_table(
         job = r.get("job_name", r["job_id"])
         step = r.get("step_name", f"step-{r['step_index']}")
 
-        # Recommended Zen with percentage diff suffix
-        zen_display = f"`{zen_id}`" if zen_id else "—"
-        if zen_id and zen_score is not None and current_score is not None and current_score > 0:
-            zen_pct = ((zen_score - current_score) / current_score) * 100
-            if abs(zen_pct) >= 0.5:
-                zen_display += f" (+{zen_pct:.0f}%)" if zen_pct > 0 else f" ({zen_pct:.0f}%)"
-            else:
-                zen_display += " (±0%)"
-
         lines.append(
             f"| `{workflow}` | `{job}` | `{step}` | `{task_type}` | "
             f"`{current}` | {zen_display} | {free_display} | {go_display} | {status} |"
@@ -1155,8 +1352,9 @@ def generate_workflow_audit_table(
 
     lines.append("")
     lines.append(
-        "_Legend: ✅ Optimal · ⚠️ Suboptimal · ❌ Wrong (paying when free equivalent exists). "
-        "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). "
+        "_Legend: \u2705 Optimal \u00b7 \u26a0\ufe0f Suboptimal \u00b7 \u274c Wrong (paying when free equivalent exists). "
+        "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free). "
+        "\u26a0\ufe0f xN marks models with elevated token consumption. "
         "Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._"
     )
 
@@ -1165,7 +1363,7 @@ def generate_workflow_audit_table(
 
 def update_readme(model_table: str, score_table: str, audit_table: str) -> bool:
     """Update README.md with the new tables."""
-    print("→ Updating README.md...")
+    print("-> Updating README.md...")
 
     if README_PATH.exists():
         content = README_PATH.read_text(encoding="utf-8")
@@ -1197,11 +1395,11 @@ def update_readme(model_table: str, score_table: str, audit_table: str) -> bool:
             content = content.rstrip() + "\n\n" + new_content
 
     README_PATH.write_text(content, encoding="utf-8")
-    print("  ✓ README.md updated")
+    print("  v README.md updated")
     return True
 
 
-# ─── Main ────────────────────────────────────────────────────────────────────
+# --- Main ---
 def main():
     print("=" * 60)
     print("OpenCode Maintenance - Model Audit & README Update")
@@ -1221,7 +1419,7 @@ def main():
     scan_results = scan_workflows()
 
     # 4. Generate recommendations & audit
-    print("→ Computing recommendations...")
+    print("-> Computing recommendations...")
 
     # All Zen models (free + paid) for benchmark scoring
     zen_data_obj = load_json(ZEN_MODELS_PATH) if ZEN_MODELS_PATH.exists() else {}
@@ -1241,7 +1439,7 @@ def main():
     )
 
     # 5. Generate and save benchmark data
-    print("→ Generating benchmark data...")
+    print("-> Generating benchmark data...")
     benchmark = get_benchmark_summary(
         all_zen_models, go_models, livebench, task_types
     )
@@ -1261,7 +1459,7 @@ def main():
             **benchmark,
         },
     )
-    print(f"  ✓ Benchmark data saved to {benchmark_path}")
+    print(f"  v Benchmark data saved to {benchmark_path}")
 
     # 6. Update README
     update_readme(model_table, score_table, audit_table)
@@ -1365,21 +1563,21 @@ def main():
     )
 
     # 8. Detect coverage issues (stale fallback, missing scores)
-    print("→ Checking model coverage...")
+    print("-> Checking model coverage...")
     coverage = detect_coverage_issues(free_models, go_models, livebench)
     save_json(COVERAGE_ISSUES_PATH, coverage)
     if coverage.get("stale_fallback"):
         for m in coverage["stale_fallback"]:
-            print(f"  ⚠ Stale fallback: {m['model']} is now in LiveBench")
+            print(f"  w Stale fallback: {m['model']} is now in LiveBench")
     if coverage.get("missing_scores"):
         for m in coverage["missing_scores"]:
-            print(f"  ❌ Missing scores: {m['model']} ({m['tier']})")
+            print(f"  x Missing scores: {m['model']} ({m['tier']})")
     if not coverage.get("stale_fallback") and not coverage.get("missing_scores"):
-        print("  ✓ All models have scores, no stale fallback entries")
+        print("  v All models have scores, no stale fallback entries")
 
 
     print("=" * 60)
-    print("✅ Maintenance complete")
+    print("Maintenance complete")
     print(f"  Workflows audited: {len(set(r['file'] for r in scan_results))}")
     print(f"  Steps checked: {len(scan_results)}")
     print(f"  LiveBench models: {len(_lb_models(livebench))}")
@@ -1389,8 +1587,8 @@ def main():
     print(f"  Audit data: {AUDIT_RESULTS_PATH}")
     print("=" * 60)
 
-    # Exit with error code if any ❌ found (for CI) or coverage issues
-    has_errors = any(r.get("status") == "❌" for r in audit_results)
+    # Exit with error code if any x found (for CI) or coverage issues
+    has_errors = any(r.get("status") == "\u274c" for r in audit_results)
     has_coverage = bool(
         coverage.get("stale_fallback") or coverage.get("missing_scores")
     )

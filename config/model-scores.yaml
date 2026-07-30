@@ -71,3 +71,9 @@ model_scores:
     overall: 45.0
     reasoning: 48.0
     vision: 40.0
+
+# Token consumption multipliers (>1.0 means the model consumes proportionally more tokens)
+# Key: normalised model name (without provider prefix or -free suffix)
+# Value: multiplier (e.g. 2.0 = x2 token consumption)
+token_multipliers:
+  kimi-k3: 2.0
