@@ -10,7 +10,7 @@ set -euo pipefail
 #
 # Outputs (via GITHUB_OUTPUT):
 #   IS_OC_COMMAND=true|false
-#   SUBCOMMAND=review|implement|task|discuss|none
+#   SUBCOMMAND=review|implement|task|discuss|retry|none
 #   TASK_ARGS=<text after the subcommand, if any>
 # ─────────────────────────────────────────────────────────────────────
 
@@ -26,9 +26,14 @@ TASK_ARGS=""
 if [[ "$TRIMMED" =~ ^/oc ]]; then
   IS_OC="true"
 
-  if [[ "$TRIMMED" =~ ^/oc[[:space:]]+implement[[:space:]]+(.*) ]]; then
+  # Order matters: more specific patterns first
+  if [[ "$TRIMMED" =~ ^/oc[[:space:]]+retry[[:space:]]*$ ]]; then
+    SUBCOMMAND="retry"
+  elif [[ "$TRIMMED" =~ ^/oc[[:space:]]+implement[[:space:]]+(.*) ]]; then
     SUBCOMMAND="implement"
     TASK_ARGS="${BASH_REMATCH[1]}"
+  elif [[ "$TRIMMED" =~ ^/oc[[:space:]]+implement[[:space:]]*$ ]]; then
+    SUBCOMMAND="implement"
   elif [[ "$TRIMMED" =~ ^/oc[[:space:]]+task[[:space:]]+(.*) ]]; then
     SUBCOMMAND="task"
     TASK_ARGS="${BASH_REMATCH[1]}"

@@ -66,6 +66,12 @@ Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/
 - Concurrency groups are keyed by issue/PR number with `cancel-in-progress: false`
 - Every process step uses `continue-on-error: true` followed by reaction-on-success/failure steps
 - Issue titles are passed via `env:` (not inline substitution) to prevent shell injection
+- Multi-line strings in `run: |` blocks must be consistently indented — all content lines must share the same indentation as the first content line; use temp-file patterns (`echo ... > /tmp/file`) instead of inline `--body "..."` for long comment bodies
+
+## Validation
+
+- **Always run `mise run lint-yaml` after editing any YAML file** — the CI lints YAML and a `syntax error: could not find expected ':'` usually means a `|` block line broke out of the correct indent level
+- Verify with `bash -n .github/scripts/auth.sh` after changing the shared auth script
 
 ## Renovate
 
