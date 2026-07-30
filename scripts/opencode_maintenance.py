@@ -193,18 +193,31 @@ def _find_best_without_multiplier(
     return None
 
 
-def _add_model_prefix(model_id: str, go_ids: set | None = None) -> str:
+def _add_model_prefix(
+    model_id: str,
+    go_ids: set | None = None,
+    engine: str | None = None,
+) -> str:
     """Add the engine prefix to a model ID for display.
 
-    Free models (ending in -free) get `opencode/` prefix.
-    Go (paid) models get `opencode-go/` prefix.
-    Zen-only paid models get `opencode/` prefix.
+    Args:
+        model_id: The raw model ID (e.g. "kimi-k3").
+        go_ids: Set of Go model IDs for auto-detection.
+        engine: Explicit engine prefix ("opencode" or "opencode-go").
+                If None, auto-detect based on model tier.
+
+    Auto-detection rules:
+        - Free models (ending in -free) get `opencode/` prefix.
+        - Go (paid) models get `opencode-go/` prefix.
+        - Zen-only paid models get `opencode/` prefix.
     If the model already has a prefix, return as-is.
     """
     if not model_id:
         return model_id
     if "/" in model_id:
         return model_id  # already has a prefix
+    if engine:
+        return f"{engine}/{model_id}"
     if model_id.endswith("-free"):
         return f"opencode/{model_id}"
     if go_ids and model_id in go_ids:
@@ -213,12 +226,14 @@ def _add_model_prefix(model_id: str, go_ids: set | None = None) -> str:
 
 
 def _prefix_alt_tuple(
-    alt: tuple | None, go_ids: set | None = None,
+    alt: tuple | None,
+    engine: str | None = None,
+    go_ids: set | None = None,
 ) -> tuple | None:
     """Prefix the model ID in an alt tuple (model_id, score)."""
     if alt is None:
         return None
-    return (_add_model_prefix(alt[0], go_ids), alt[1])
+    return (_add_model_prefix(alt[0], go_ids, engine=engine), alt[1])
 
 
 # --- Utils ---
@@ -1044,12 +1059,12 @@ def generate_model_recommendation_table(
         go_alt_raw = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
 
         # Prefix model IDs for display
-        zen_id_disp = _add_model_prefix(zen_id, go_ids) if zen_id else None
-        best_free_disp = _add_model_prefix(best_free, go_ids) if best_free else None
-        best_go_disp = _add_model_prefix(best_go, go_ids) if best_go else None
-        zen_alt = _prefix_alt_tuple(zen_alt_raw, go_ids)
-        free_alt = _prefix_alt_tuple(free_alt_raw, go_ids)
-        go_alt = _prefix_alt_tuple(go_alt_raw, go_ids)
+        zen_id_disp = _add_model_prefix(zen_id, engine="opencode") if zen_id else None
+        best_free_disp = _add_model_prefix(best_free, engine="opencode") if best_free else None
+        best_go_disp = _add_model_prefix(best_go, engine="opencode-go") if best_go else None
+        zen_alt = _prefix_alt_tuple(zen_alt_raw, engine="opencode")
+        free_alt = _prefix_alt_tuple(free_alt_raw, engine="opencode")
+        go_alt = _prefix_alt_tuple(go_alt_raw, engine="opencode-go")
 
         # Highlight the winner based on free-first policy
         # Winner gets trophy emoji
@@ -1293,9 +1308,9 @@ def generate_workflow_audit_table(
         go_scored.sort(key=lambda x: x[1], reverse=True)
 
         # Prefix model IDs for display
-        zen_id_disp = _add_model_prefix(zen_id, go_ids) if zen_id else None
-        best_free_disp = _add_model_prefix(best_free, go_ids) if best_free else None
-        best_go_disp = _add_model_prefix(best_go, go_ids) if best_go else None
+        zen_id_disp = _add_model_prefix(zen_id, engine="opencode") if zen_id else None
+        best_free_disp = _add_model_prefix(best_free, engine="opencode") if best_free else None
+        best_go_disp = _add_model_prefix(best_go, engine="opencode-go") if best_go else None
 
         # Compute Zen cell with multiplier awareness
         zen_alt_raw = _find_best_without_multiplier(zen_scored)
@@ -1304,7 +1319,7 @@ def generate_workflow_audit_table(
         if zen_alt_raw and has_token_multiplier(zen_id):
             alt_id, alt_score = zen_alt_raw
             # Prefix the alt ID
-            alt_id_disp = _add_model_prefix(alt_id, go_ids)
+            alt_id_disp = _add_model_prefix(alt_id, engine="opencode")
             zen_alt_suffix = ""
             if alt_score is not None and current_score is not None and current_score > 0:
                 alt_pct = ((alt_score - current_score) / current_score) * 100
@@ -1353,8 +1368,8 @@ def generate_workflow_audit_table(
         # Alt for free and go recommendations
         free_alt_raw = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
         go_alt_raw = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
-        free_alt = _prefix_alt_tuple(free_alt_raw, go_ids)
-        go_alt = _prefix_alt_tuple(go_alt_raw, go_ids)
+        free_alt = _prefix_alt_tuple(free_alt_raw, engine="opencode")
+        go_alt = _prefix_alt_tuple(go_alt_raw, engine="opencode-go")
         # For free/go alt scores, bake diff_str in since format_model_with_score
         # no longer appends score_suffix to alt_score (avoids double-suffix)
         go_alt_score_baked = f"{go_alt[1]}{diff_str}" if go_alt and diff_str else (go_alt[1] if go_alt else None)
