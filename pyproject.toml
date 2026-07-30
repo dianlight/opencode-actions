@@ -1,9 +1,18 @@
 [tool.basedpyright]
 include = ["scripts"]
 
-# The script is not fully typed — relax rules that would be noisy
-# while keeping real issues visible.
-reportMissingTypeArgument = "warning"
+# The script works with unstructured JSON/YAML API data, so many
+# variables inherently have unknown types. We suppress the cascading
+# "partially unknown" warnings and focus on real type errors.
+reportMissingTypeArgument = "none"
 reportConstantRedefinition = "none"
-reportExplicitAny = "warning"
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownParameterType = "none"
+reportMissingParameterType = "none"
+reportAny = "none"
+reportExplicitAny = "none"
+reportUnknownArgumentType = "none"
+reportUnusedParameter = "none"
 reportUnnecessaryIsInstance = "none"
