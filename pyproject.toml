@@ -1,0 +1,9 @@
+[tool.basedpyright]
+include = ["scripts"]
+
+# The script is not fully typed — relax rules that would be noisy
+# while keeping real issues visible.
+reportMissingTypeArgument = "warning"
+reportConstantRedefinition = "none"
+reportExplicitAny = "warning"
+reportUnnecessaryIsInstance = "none"

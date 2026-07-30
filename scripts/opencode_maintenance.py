@@ -155,7 +155,7 @@ def format_model_with_score(
     *,
     show_multiplier: bool = True,
     alt_model_id: str | None = None,
-    alt_score: float | None = None,
+    alt_score: float | str | None = None,
     score_suffix: str = "",
 ) -> str:
     """Format a model cell as "Model (score)" with optional multiplier warning and alt.
