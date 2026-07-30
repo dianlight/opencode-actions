@@ -488,8 +488,6 @@ def scan_workflows() -> list[dict[str, Any]]:
         list(WORKFLOWS_DIR.glob("*.yml")) + list(WORKFLOWS_DIR.glob("*.yaml"))
     ):
         stem = wf_file.stem
-        if stem in ("opencode-maintenance", "opencode-maintence"):
-            continue  # skip self (handles both spellings)
 
         try:
             content = wf_file.read_text(encoding="utf-8")

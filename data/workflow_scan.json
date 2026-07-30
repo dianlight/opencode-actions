@@ -28,6 +28,20 @@
     "mapped": true
   },
   {
+    "file": ".github/workflows/opencode-maintenance.yaml",
+    "workflow_name": "OpenCode Maintenance",
+    "job_id": "handle-checkbox-task",
+    "job_name": "Handle Checked Tasks",
+    "step_index": 4,
+    "step_name": "Run OpenCode for checked tasks",
+    "action_ref": "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a",
+    "model": "opencode-go/kimi-k2.6",
+    "agent": "",
+    "prompt_preview": "You are triggered by a user checking task checkboxes in a maintenance issue.\n\nRepo: ${{ github.repository }}\nIssue: #${{ github.event.issue.number }}\nTasks: env \\`CHECKED_TASKS\\` (comma-separated list)\nTargeted jobs (for fix-suboptimal-configs): env \\`CHECKED_JOB_IDS\\`\n\nRead the issue body with \\`gh issue view $ISSUE_NUMBER --json body --jq .body\\`.\n\nIf \"search-missing-scores\" is in CHECKED_TASKS:\n1. Read the \"Models Missing Score Data\" section from the issue body\n2. Search the web for benchmark",
+    "task_type": "code-implementation",
+    "mapped": true
+  },
+  {
     "file": ".github/workflows/opencode-pr-comment.yml",
     "workflow_name": "opencode-pr-comment",
     "job_id": "process-2",

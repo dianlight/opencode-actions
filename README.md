@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-30 18:26 UTC**.
+> Last updated: **2026-07-30 22:36 UTC**.
 > LiveBench data: **121 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -65,14 +65,15 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-30 18:26 UTC**
-> Workflows checked: **3**
-> OpenCode steps found: **6**
+> Audited: **2026-07-30 22:36 UTC**
+> Workflows checked: **4**
+> OpenCode steps found: **7**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|-----------------|------------------|----------------|--------|
 | `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode-go/qwen3.7-max` | `opencode/gemini-3.1-pro` (79.6 (+4%)) | `opencode/deepseek-v4-flash-free` (69.4) | 🏆 `opencode-go/qwen3.7-max` (76.6 (+10%)) | ✅ |
 | `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode/deepseek-v4-flash-free` | `opencode/claude-opus-4-7` (70.3 (+22%)) | `opencode/deepseek-v4-flash-free` (57.7) | 🏆 `opencode-go/kimi-k3` (72.0 (+25%)) ⚠️ x2.0 · alt: `opencode-go/kimi-k2.6` (66.4 (+25%)) | ⚠️ |
+| `OpenCode Maintenance` | `Handle Checked Tasks` | `Run OpenCode for checked tasks` | `code-implementation` | `opencode-go/kimi-k2.6` | `opencode/claude-opus-4-7` (70.3 (+6%)) | `opencode/deepseek-v4-flash-free` (57.7) | 🏆 `opencode-go/kimi-k3` (72.0 (+25%)) ⚠️ x2.0 · alt: `opencode-go/kimi-k2.6` (66.4 (+25%)) | ✅ |
 | `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `opencode/gpt-5.5` (89.5 (+22%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/deepseek-v4-pro` (83.9 (+15%)) | ⚠️ |
 | `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode/deepseek-v4-flash-free` | `opencode/gpt-5.5` (89.5 (+22%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/deepseek-v4-pro` (83.9 (+15%)) | ⚠️ |
 | `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `code-implementation` | `opencode-go/kimi-k2.6` | `opencode/claude-opus-4-7` (70.3 (+6%)) | `opencode/deepseek-v4-flash-free` (57.7) | 🏆 `opencode-go/kimi-k3` (72.0 (+25%)) ⚠️ x2.0 · alt: `opencode-go/kimi-k2.6` (66.4 (+25%)) | ✅ |

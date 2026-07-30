@@ -7,6 +7,7 @@ workflow_task_map:
   "opencode-pr-review": "pr-review"
   "opencode-pr-comment": "pr-review"
   "opencode-issue-handler": "issue-triage"
+  "opencode-maintenance": "code-implementation"
 
 # Job-level overrides: when a workflow has multiple jobs with different
 # task types, the maintenance script applies the job-specific override
@@ -14,3 +15,4 @@ workflow_task_map:
 job_task_overrides:
   "opencode-issue-handler/process-5": "issue-implementation"
   "opencode-pr-comment/process-6": "code-implementation"
+  "opencode-maintenance/handle-checkbox-task": "code-implementation"

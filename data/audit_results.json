@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-07-30T18:26:48.447523+00:00",
+  "timestamp": "2026-07-30T22:36:25.672428+00:00",
   "livebench_snapshot": "2026_01_08",
   "livebench_source": "https://livebench.ai/table_2026_01_08.csv",
   "livebench_models": 121,
   "free_models": 6,
   "go_models": 23,
-  "workflows_audited": 3,
-  "steps_audited": 6,
+  "workflows_audited": 4,
+  "steps_audited": 7,
   "results": [
     {
       "file": ".github/workflows/opencode-issue-handler.yml",
@@ -33,6 +33,19 @@
       "preferred_tier": "go",
       "preferred_diff": 25,
       "status": "\u26a0\ufe0f"
+    },
+    {
+      "file": ".github/workflows/opencode-maintenance.yaml",
+      "workflow": "OpenCode Maintenance",
+      "job": "Handle Checked Tasks",
+      "step": "Run OpenCode for checked tasks",
+      "task_type": "code-implementation",
+      "current_model": "opencode-go/kimi-k2.6",
+      "recommended_free": "deepseek-v4-flash-free",
+      "recommended_go": "kimi-k3",
+      "preferred_tier": "go",
+      "preferred_diff": 25,
+      "status": "\u2705"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
