@@ -86,7 +86,7 @@ jobs:
           import json
           with open('data/audit_results.json') as f:
               d = json.load(f)
-          count = sum(1 for r in d.get('results', []) if r.get('status') in ('\u26a0\ufe0f', '\u274c'))
+          count = sum(1 for r in d.get('results', []) if r.get('status') in ('\u26a0\ufe0f', '\u274c', '\u2757', '\U0001f480'))
           print(count)
           " 2>/dev/null || echo "0")
 
@@ -108,7 +108,7 @@ jobs:
           stale = coverage.get("stale_fallback", [])
           missing = coverage.get("missing_scores", [])
           results = audit.get("results", [])
-          suboptimal = [r for r in results if r.get("status") in ("\u26a0\ufe0f", "\u274c")]
+          suboptimal = [r for r in results if r.get("status") in ("\u26a0\ufe0f", "\u274c", "\u2757", "\U0001f480")]
 
           lines = [
               "# OpenCode Maintenance Report",

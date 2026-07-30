@@ -711,12 +711,14 @@ def get_best_zen_model_for_task(
     zen_models: list,
     livebench: dict,
     task_types: list,
+    go_ids: set | None = None,
 ) -> tuple:
     """Find best model across ALL Zen models (free + paid) for a task type.
 
     Returns (model_id, score, subscore_used) or (None, None, None).
-    This is the overall best model regardless of tier, used as the
-    benchmark reference in recommendation and audit tables.
+    This is the overall best model available via the `opencode/` engine,
+    used as the benchmark reference in recommendation and audit tables.
+    Models that are only available via `opencode-go/` (Go) are excluded.
     """
     tt = next((t for t in task_types if t["name"] == task_type), None)
     if not tt:
@@ -727,6 +729,9 @@ def get_best_zen_model_for_task(
     zen_ids = [m["id"] for m in zen_models]
     scored = []
     for model_id in zen_ids:
+        # Exclude Go-only models from Best Zen consideration
+        if go_ids and model_id in go_ids:
+            continue
         score = get_model_score(model_id, livebench, priority)
         if score is not None:
             scored.append((model_id, score))
@@ -876,13 +881,20 @@ def classify_model_status(
     current: str, recommended_free: str, recommended_go: str,
     alt_models: list | None = None,
 ) -> str:
-    """Classify model status: Optimal, Suboptimal, Wrong.
+    """Classify model status with a 5-tier system.
+
+    Rules:
+      \u2705 OK       - current matches best model (after free-first) OR an alt (best without multiplier)
+      \u26a0\ufe0f Warn  - current is a free model (ends with -free) but not the best
+      \u2757 Alert   - free-first chose free but current is a paid model
+      \u274c Error   - current exists but doesn't fit any other rule
+      \U0001f480 Fatal   - current is falsy or "NOT_SET"
 
     Accepts an optional list of alt model names (e.g. best without multiplier)
     that are also considered valid choices.
     """
     if not current or current == "NOT_SET":
-        return "\u274c"
+        return "\U0001f480"  # Fatal
 
     # Normalize model names for comparison (strip opencode/ prefix, lowercase)
     curr = _strip_model_prefix(current).lower().strip()
@@ -895,8 +907,14 @@ def classify_model_status(
         _strip_model_prefix(recommended_go).lower().strip() if recommended_go else ""
     )
 
-    # Also check against accepted alt models (e.g. best without multiplier)
-    accepted = {rec_free, rec_go}
+    # Free-first rule: if rec_free == rec_go, free won
+    free_won = bool(rec_free and rec_go and rec_free == rec_go)
+    best = rec_free if free_won else rec_go
+
+    # Build accepted set: best model + any alts (e.g. best without multiplier)
+    accepted = set()
+    if best:
+        accepted.add(best)
     if alt_models:
         for am in alt_models:
             normalized = _strip_model_prefix(am).lower().strip()
@@ -904,14 +922,17 @@ def classify_model_status(
                 accepted.add(normalized)
 
     if curr in accepted:
-        return "\u2705"
+        return "\u2705"  # OK - matches best or alt
 
-    # Check if current is a paid model when free equivalent exists
-    is_paid = not curr.endswith("-free")
-    if is_paid and rec_free and rec_free != rec_go:
-        return "\u274c"  # Paying when free is recommended
+    # Not the best model
+    if not curr.endswith("-free"):
+        # Paid model
+        if free_won:
+            return "\u2757"  # Alert - paying when free is preferred
+        return "\u274c"  # Error - wrong model
 
-    return "\u26a0\ufe0f"  # Suboptimal but not wrong
+    # Free model, not the best
+    return "\u26a0\ufe0f"  # Warn - free but not optimal
 
 
 # --- README Generation ---
@@ -1019,9 +1040,9 @@ def generate_model_recommendation_table(
             best_free, best_go, livebench, priority, threshold_pct
         )
 
-        # Best Zen model (overall best from all Zen models)
+        # Best Zen model (overall best from all Zen models, excluding Go-only)
         zen_id, zen_score, _ = get_best_zen_model_for_task(
-            name, all_zen, livebench, task_types
+            name, all_zen, livebench, task_types, go_ids=go_ids
         )
 
         free_score = (
@@ -1032,6 +1053,9 @@ def generate_model_recommendation_table(
         # Build scored lists (sorted best-first) for finding alts without multiplier
         zen_scored = []
         for m in all_zen:
+            # Exclude Go-only models from Zen consideration
+            if m["id"] in go_ids:
+                continue
             s = get_model_score(m["id"], livebench, priority)
             if s is not None:
                 zen_scored.append((m["id"], s))
@@ -1265,7 +1289,7 @@ def generate_workflow_audit_table(
 
         # Best Zen model and % diff vs current
         zen_id, zen_score, _ = get_best_zen_model_for_task(
-            task_type, all_zen, livebench, task_types
+            task_type, all_zen, livebench, task_types, go_ids=go_ids
         )
         priority = next(
             (t["priority"] for t in task_types if t["name"] == task_type), "overall"
@@ -1286,6 +1310,9 @@ def generate_workflow_audit_table(
         # Build scored lists for finding alts without multiplier
         zen_scored = []
         for m in all_zen:
+            # Exclude Go-only models from Zen consideration
+            if m["id"] in go_ids:
+                continue
             s = get_model_score(m["id"], livebench, priority)
             if s is not None:
                 zen_scored.append((m["id"], s))
@@ -1429,7 +1456,10 @@ def generate_workflow_audit_table(
 
     lines.append("")
     lines.append(
-        "_Legend: \u2705 Optimal \u00b7 \u26a0\ufe0f Suboptimal \u00b7 \u274c Wrong (paying when free equivalent exists). "
+        "_Legend: \u2705 Optimal \u00b7 \u26a0\ufe0f Warn (free, not best) \u00b7 "
+        "\u2757 Alert (paid when free is preferred) \u00b7 "
+        "\u274c Error (wrong model) \u00b7 "
+        "\U0001f480 Fatal (model not set). "
         "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free). "
         "\u26a0\ufe0f xN marks models with elevated token consumption. "
         "Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._"
@@ -1689,8 +1719,8 @@ def main():
     print(f"  Audit data: {AUDIT_RESULTS_PATH}")
     print("=" * 60)
 
-    # Exit with error code if any x found (for CI) or coverage issues
-    has_errors = any(r.get("status") == "\u274c" for r in audit_results)
+    # Exit with error code if any \u274c (Error), \u2757 (Alert), or \U0001f480 (Fatal) found (for CI) or coverage issues
+    has_errors = any(r.get("status") in ("\u274c", "\u2757", "\U0001f480") for r in audit_results)
     has_coverage = bool(
         coverage.get("stale_fallback") or coverage.get("missing_scores")
     )

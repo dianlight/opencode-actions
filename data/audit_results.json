@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-30T18:02:07.250666+00:00",
+  "timestamp": "2026-07-30T18:18:03.913268+00:00",
   "livebench_snapshot": "2026_01_08",
   "livebench_source": "https://livebench.ai/table_2026_01_08.csv",
   "livebench_models": 121,
@@ -32,7 +32,7 @@
       "recommended_go": "kimi-k3",
       "preferred_tier": "go",
       "preferred_diff": 25,
-      "status": "\u2705"
+      "status": "\u26a0\ufe0f"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -45,7 +45,7 @@
       "recommended_go": "deepseek-v4-pro",
       "preferred_tier": "go",
       "preferred_diff": 15,
-      "status": "\u2705"
+      "status": "\u26a0\ufe0f"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -58,7 +58,7 @@
       "recommended_go": "deepseek-v4-pro",
       "preferred_tier": "go",
       "preferred_diff": 15,
-      "status": "\u2705"
+      "status": "\u26a0\ufe0f"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -84,7 +84,7 @@
       "recommended_go": "deepseek-v4-pro",
       "preferred_tier": "go",
       "preferred_diff": 15,
-      "status": "\u2705"
+      "status": "\u26a0\ufe0f"
     }
   ]
 }
