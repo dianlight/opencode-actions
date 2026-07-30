@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-30 18:18 UTC**.
+> Last updated: **2026-07-30 18:26 UTC**.
 > LiveBench data: **121 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -47,7 +47,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `kimi-k2.7-code` | Go (Paid) | f Fallback | Code, Impl | — | 58.0 | 61.0 | 55.0 | 48.0 | 58.0 |
 | `kimi-k3` | Go (Paid) | f Fallback | Code, Impl | ⚠️ x2.0 | 57.0 | 72.0 | 70.0 | 60.0 | 68.0 |
 | `laguna-s-2.1-free` | Free | f Fallback | Ask, Triage | — | 45.0 | 52.0 | 48.0 | 40.0 | 54.0 |
-| `ling-3.0-flash-free` | Free | x Missing | — | — | — | — | — | — | — |
+| `ling-3.0-flash-free` | Free | f Fallback | Ask, Triage | — | 45.0 | 48.0 | 48.0 | 40.0 | 50.0 |
 | `mimo-v2-omni` | Go (Paid) | f Fallback | Design, Ask | — | 50.0 | 42.0 | 48.0 | 55.0 | 50.0 |
 | `mimo-v2-pro` | Go (Paid) | v LiveBench | Plan, Review | — | 58.4 | 45.5 | 65.8 | 43.6 | 57.8 |
 | `mimo-v2.5` | Go (Paid) | f Fallback | Ask, Triage | — | 62.0 | 60.0 | 64.0 | 58.0 | 65.0 |
@@ -65,7 +65,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-30 18:18 UTC**
+> Audited: **2026-07-30 18:26 UTC**
 > Workflows checked: **3**
 > OpenCode steps found: **6**
 
