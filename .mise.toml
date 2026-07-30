@@ -1,5 +1,6 @@
 [tools]
 python = "3.14"
+ruff = "latest"
 yamllint = "1.38"
 
 [hooks]
@@ -12,3 +13,7 @@ description = "Run the OpenCode maintenance script"
 [tasks.lint-yaml]
 run = "yamllint .github .github/workflows config"
 description = "Lint all YAML files"
+
+[tasks.lint-python]
+run = "ruff check scripts/"
+description = "Lint all Python files with ruff"

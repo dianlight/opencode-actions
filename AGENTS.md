@@ -19,6 +19,9 @@ mise install                  # installs python 3.14 + yamllint, pip installs re
 # Lint YAML (also runs in CI via opencode-maintenance)
 mise run lint-yaml
 
+# Lint Python with ruff (also runs in CI via opencode-maintenance)
+mise run lint-python
+
 # Run the maintenance script (fetches models, updates README)
 mise run maintenance
 # or directly:
@@ -58,7 +61,8 @@ Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/
 - `.yamllint` — 180-char line limit for GitHub Actions expressions, 2-space indent, truthy rule relaxed
 - `config/task-types.yaml` — task type definitions with signal keywords and priority subscores
 - `config/workflow-task-map.yaml` — workflow→task type mapping with job-level overrides
-- `config/model-scores.yaml` — static fallback scores for models not on LiveBench
+- `config/model-scores.yaml` — static fallback scores for models not on LiveBench (also includes `token_multipliers` config)
+- `ruff.toml` — ruff linter configuration (Python)
 
 ## Workflow conventions
 
@@ -71,6 +75,7 @@ Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/
 ## Validation
 
 - **Always run `mise run lint-yaml` after editing any YAML file** — the CI lints YAML and a `syntax error: could not find expected ':'` usually means a `|` block line broke out of the correct indent level
+- **Always run `mise run lint-python` after editing any Python file** — the CI checks Python with ruff
 - Verify with `bash -n .github/scripts/auth.sh` after changing the shared auth script
 
 ## Renovate

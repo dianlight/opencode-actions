@@ -14,9 +14,9 @@ import io
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -150,12 +150,12 @@ def has_token_multiplier(model_name: str) -> bool:
 
 
 def format_model_with_score(
-    model_id: Optional[str],
-    score: Optional[float],
+    model_id: str | None,
+    score: float | None,
     *,
     show_multiplier: bool = True,
-    alt_model_id: Optional[str] = None,
-    alt_score: Optional[float] = None,
+    alt_model_id: str | None = None,
+    alt_score: float | None = None,
     score_suffix: str = "",
 ) -> str:
     """Format a model cell as "Model (score)" with optional multiplier warning and alt.
@@ -179,7 +179,7 @@ def format_model_with_score(
 
 def _find_best_without_multiplier(
     scored_list: list,
-) -> Optional[tuple]:
+) -> tuple | None:
     """From a scored list (sorted best-first), find the first entry without token multiplier.
 
     scored_list items: (model_id, ...) — any extra fields are ignored.
@@ -193,8 +193,36 @@ def _find_best_without_multiplier(
     return None
 
 
+def _add_model_prefix(model_id: str, go_ids: set | None = None) -> str:
+    """Add the engine prefix to a model ID for display.
+
+    Free models (ending in -free) get `opencode/` prefix.
+    Go (paid) models get `opencode-go/` prefix.
+    Zen-only paid models get `opencode/` prefix.
+    If the model already has a prefix, return as-is.
+    """
+    if not model_id:
+        return model_id
+    if "/" in model_id:
+        return model_id  # already has a prefix
+    if model_id.endswith("-free"):
+        return f"opencode/{model_id}"
+    if go_ids and model_id in go_ids:
+        return f"opencode-go/{model_id}"
+    return f"opencode/{model_id}"
+
+
+def _prefix_alt_tuple(
+    alt: tuple | None, go_ids: set | None = None,
+) -> tuple | None:
+    """Prefix the model ID in an alt tuple (model_id, score)."""
+    if alt is None:
+        return None
+    return (_add_model_prefix(alt[0], go_ids), alt[1])
+
+
 # --- Utils ---
-def fetch_json(url: str, timeout: int = 15) -> Optional[dict]:
+def fetch_json(url: str, timeout: int = 15) -> dict | None:
     """Fetch JSON from URL with timeout."""
     try:
         req = Request(url, headers={"User-Agent": "opencode-maintenance/1.0"})
@@ -205,7 +233,7 @@ def fetch_json(url: str, timeout: int = 15) -> Optional[dict]:
         return None
 
 
-def fetch_text(url: str, timeout: int = 15) -> Optional[str]:
+def fetch_text(url: str, timeout: int = 15) -> str | None:
     """Fetch text from URL with timeout."""
     try:
         req = Request(url, headers={"User-Agent": "opencode-maintenance/1.0"})
@@ -216,7 +244,7 @@ def fetch_text(url: str, timeout: int = 15) -> Optional[str]:
         return None
 
 
-def fetch_livebench_csv(date_str: str) -> Optional[str]:
+def fetch_livebench_csv(date_str: str) -> str | None:
     """Try to fetch LiveBench CSV for a specific date."""
     url = f"{LIVEBENCH_BASE}/table_{date_str}.csv"
     return fetch_text(url)
@@ -262,7 +290,7 @@ def parse_livebench_csv(csv_text: str) -> dict:
             if all_values:
                 subscores["overall"] = round(sum(all_values) / len(all_values), 1)
                 result[model] = subscores
-    except Exception as e:
+    except (csv.Error, KeyError, ValueError, TypeError) as e:
         print(f"  x CSV parse error: {e}")
     return result
 
@@ -312,7 +340,7 @@ def fetch_opencode_models() -> tuple:
     return free_models, go_models
 
 
-def get_latest_livebench_date() -> Optional[str]:
+def get_latest_livebench_date() -> str | None:
     """Parse the latest snapshot date from the LiveBench changelog.
 
     The changelog uses `### YYYY-MM-DD` headers; the first one is the most recent.
@@ -503,7 +531,7 @@ def scan_workflows() -> list:
                         }
                     )
 
-        except Exception as e:
+        except (yaml.YAMLError, KeyError, ValueError, OSError) as e:
             results.append(
                 {
                     "file": str(wf_file.relative_to(ROOT)),
@@ -522,7 +550,7 @@ def classify_task_type(
     wf_name: str, job_name: str, step_name: str, prompt: str, task_types: list
 ) -> str:
     """Classify workflow step into task type based on signals."""
-    text = " ".join([wf_name, job_name, step_name, prompt]).lower()
+    text = f"{wf_name} {job_name} {step_name} {prompt}".lower()
 
     for tt in task_types:
         for signal in tt.get("signals", []):
@@ -556,12 +584,11 @@ def _normalise_model_for_lookup(model_name: str) -> str:
     if "/" in name and not name.startswith("http"):
         name = name.rsplit("/", 1)[-1]
     # Strip -free suffix (OpenCode free version indicator, not part of model name)
-    if name.endswith("-free"):
-        name = name[:-5]
+    name = name.removesuffix("-free")
     return name
 
 
-def get_model_score(model_name: str, livebench: dict, subscore: str) -> Optional[float]:
+def get_model_score(model_name: str, livebench: dict, subscore: str) -> float | None:
     """Get a model's subscore from LiveBench data or static fallback (case-insensitive, suffix-stripped)."""
     s = _get_model_score_and_source(model_name, livebench, subscore)
     return s[0] if s else None
@@ -569,7 +596,7 @@ def get_model_score(model_name: str, livebench: dict, subscore: str) -> Optional
 
 def _get_model_score_and_source(
     model_name: str, livebench: dict, subscore: str
-) -> Optional[tuple]:
+) -> tuple | None:
     """Like get_model_score but returns (score, source) where source is 'livebench' or 'fallback'."""
     models = _lb_models(livebench)
     target = _normalise_model_for_lookup(model_name)
@@ -831,9 +858,14 @@ def _strip_model_prefix(model: str) -> str:
 
 
 def classify_model_status(
-    current: str, recommended_free: str, recommended_go: str
+    current: str, recommended_free: str, recommended_go: str,
+    alt_models: list | None = None,
 ) -> str:
-    """Classify model status: Optimal, Suboptimal, Wrong."""
+    """Classify model status: Optimal, Suboptimal, Wrong.
+
+    Accepts an optional list of alt model names (e.g. best without multiplier)
+    that are also considered valid choices.
+    """
     if not current or current == "NOT_SET":
         return "\u274c"
 
@@ -848,7 +880,15 @@ def classify_model_status(
         _strip_model_prefix(recommended_go).lower().strip() if recommended_go else ""
     )
 
-    if curr == rec_free or curr == rec_go:
+    # Also check against accepted alt models (e.g. best without multiplier)
+    accepted = {rec_free, rec_go}
+    if alt_models:
+        for am in alt_models:
+            normalized = _strip_model_prefix(am).lower().strip()
+            if normalized:
+                accepted.add(normalized)
+
+    if curr in accepted:
         return "\u2705"
 
     # Check if current is a paid model when free equivalent exists
@@ -915,7 +955,7 @@ def generate_model_recommendation_table(
     go_models: list,
     livebench: dict,
     threshold_pct: float,
-    zen_models: Optional[list] = None,
+    zen_models: list | None = None,
 ) -> str:
     """Generate the task-type model recommendation table.
 
@@ -932,7 +972,7 @@ def generate_model_recommendation_table(
         "## Model Recommendations by Task Type",
         "",
         "> Automatically updated by `opencode-maintenance` workflow.",
-        f"> Last updated: **{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}**.",
+        f"> Last updated: **{datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}**.",
         f"> LiveBench data: **{len(models)} models scored**.",
     ]
     if snapshot_date:
@@ -949,8 +989,8 @@ def generate_model_recommendation_table(
     )
     lines = header_lines
 
-    all_zen = zen_models if zen_models else []
-    go_ids = set(m["id"] for m in go_models)
+    all_zen = zen_models or []
+    go_ids = {m["id"] for m in go_models}
 
     for tt in task_types:
         name = tt["name"]
@@ -999,38 +1039,46 @@ def generate_model_recommendation_table(
         go_scored.sort(key=lambda x: x[1], reverse=True)
 
         # Find alt without multiplier for each column
-        zen_alt = _find_best_without_multiplier(zen_scored) if has_token_multiplier(zen_id) else None
-        free_alt = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
-        go_alt = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
+        zen_alt_raw = _find_best_without_multiplier(zen_scored) if has_token_multiplier(zen_id) else None
+        free_alt_raw = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
+        go_alt_raw = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
+
+        # Prefix model IDs for display
+        zen_id_disp = _add_model_prefix(zen_id, go_ids) if zen_id else None
+        best_free_disp = _add_model_prefix(best_free, go_ids) if best_free else None
+        best_go_disp = _add_model_prefix(best_go, go_ids) if best_go else None
+        zen_alt = _prefix_alt_tuple(zen_alt_raw, go_ids)
+        free_alt = _prefix_alt_tuple(free_alt_raw, go_ids)
+        go_alt = _prefix_alt_tuple(go_alt_raw, go_ids)
 
         # Highlight the winner based on free-first policy
         # Winner gets trophy emoji
-        if best_free and best_go and best_free == best_go:
+        if best_free_disp and best_go_disp and best_free_disp == best_go_disp:
             # Same model (free model wins due to free-first rule)
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
                 alt_score=free_alt[1] if free_alt else None,
             )
-            go_display = format_model_with_score(best_go, go_score)
+            go_display = format_model_with_score(best_go_disp, go_score)
         elif best_go and best_free:
             # Different models - go model wins (free wasn't within threshold)
             free_display = format_model_with_score(
-                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
                 alt_score=free_alt[1] if free_alt else None,
             )
             go_display = "\U0001f3c6 " + format_model_with_score(
-                best_go, go_score, alt_model_id=go_alt[0] if go_alt else None,
+                best_go_disp, go_score, alt_model_id=go_alt[0] if go_alt else None,
                 alt_score=go_alt[1] if go_alt else None,
             )
         elif best_go:
             free_display = "\u2014"
             go_display = "\U0001f3c6 " + format_model_with_score(
-                best_go, go_score, alt_model_id=go_alt[0] if go_alt else None,
+                best_go_disp, go_score, alt_model_id=go_alt[0] if go_alt else None,
                 alt_score=go_alt[1] if go_alt else None,
             )
         elif best_free:
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
                 alt_score=free_alt[1] if free_alt else None,
             )
             go_display = "\u2014"
@@ -1039,7 +1087,7 @@ def generate_model_recommendation_table(
             go_display = "\u2014"
 
         zen_display = format_model_with_score(
-            zen_id, zen_score, alt_model_id=zen_alt[0] if zen_alt else None,
+            zen_id_disp, zen_score, alt_model_id=zen_alt[0] if zen_alt else None,
             alt_score=zen_alt[1] if zen_alt else None,
         )
 
@@ -1054,8 +1102,8 @@ def generate_score_reference_table(
     livebench: dict,
     free_models: list,
     go_models: list,
-    zen_models: Optional[list] = None,
-    task_types: Optional[list] = None,
+    zen_models: list | None = None,
+    task_types: list | None = None,
 ) -> str:
     """Generate the detailed score reference table with source indicators.
 
@@ -1148,7 +1196,7 @@ def generate_workflow_audit_table(
     livebench: dict,
     task_types: list,
     threshold_pct: float,
-    zen_models: Optional[list] = None,
+    zen_models: list | None = None,
 ) -> str:
     """Generate the workflow audit table with status icons.
 
@@ -1162,15 +1210,15 @@ def generate_workflow_audit_table(
     if not scan_results:
         return "\n## Workflow Model Audit\n\n> No OpenCode workflows found (excluding maintenance workflow).\n"
 
-    all_zen = zen_models if zen_models else []
-    go_ids = set(m["id"] for m in go_models)
+    all_zen = zen_models or []
+    go_ids = {m["id"] for m in go_models}
 
     lines = [
         "",
         "## Workflow Model Audit",
         "",
-        f"> Audited: **{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}**",
-        f"> Workflows checked: **{len(set(r['file'] for r in scan_results))}**",
+        f"> Audited: **{datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}**",
+        f"> Workflows checked: **{len({r['file'] for r in scan_results})}**",
         f"> OpenCode steps found: **{len(scan_results)}**",
         "",
         "| Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Recommended Free | Recommended Go | Status |",
@@ -1244,12 +1292,19 @@ def generate_workflow_audit_table(
                 go_scored.append((m["id"], s))
         go_scored.sort(key=lambda x: x[1], reverse=True)
 
+        # Prefix model IDs for display
+        zen_id_disp = _add_model_prefix(zen_id, go_ids) if zen_id else None
+        best_free_disp = _add_model_prefix(best_free, go_ids) if best_free else None
+        best_go_disp = _add_model_prefix(best_go, go_ids) if best_go else None
+
         # Compute Zen cell with multiplier awareness
-        zen_alt = _find_best_without_multiplier(zen_scored)
+        zen_alt_raw = _find_best_without_multiplier(zen_scored)
         # For Zen column, we need % diff for alt too
         zen_alt_info = None
-        if zen_alt and has_token_multiplier(zen_id):
-            alt_id, alt_score = zen_alt
+        if zen_alt_raw and has_token_multiplier(zen_id):
+            alt_id, alt_score = zen_alt_raw
+            # Prefix the alt ID
+            alt_id_disp = _add_model_prefix(alt_id, go_ids)
             zen_alt_suffix = ""
             if alt_score is not None and current_score is not None and current_score > 0:
                 alt_pct = ((alt_score - current_score) / current_score) * 100
@@ -1257,25 +1312,22 @@ def generate_workflow_audit_table(
                     zen_alt_suffix = f" (+{alt_pct:.0f}%)" if alt_pct > 0 else f" ({alt_pct:.0f}%)"
                 else:
                     zen_alt_suffix = " (0%)"
-            zen_alt_info = (alt_id, alt_score, zen_alt_suffix)
+            zen_alt_info = (alt_id_disp, alt_score, zen_alt_suffix)
 
         # Format Zen cell
-        if zen_id:
-            zen_score_part = f"{zen_score}{zen_suffix}"
+        if zen_id_disp:
             if has_token_multiplier(zen_id) and zen_alt_info:
                 alt_id, alt_score, alt_suf = zen_alt_info
                 zen_display = format_model_with_score(
-                    zen_id, zen_score, score_suffix=zen_suffix,
+                    zen_id_disp, zen_score, score_suffix=zen_suffix,
                     alt_model_id=alt_id, alt_score=f"{alt_score}{alt_suf}",
                 )
             else:
                 zen_display = format_model_with_score(
-                    zen_id, zen_score, score_suffix=zen_suffix,
+                    zen_id_disp, zen_score, score_suffix=zen_suffix,
                 )
         else:
             zen_display = "\u2014"
-
-        status = classify_model_status(current, best_free, best_go)
 
         # Compute percentage diff and trophy display
         free_score = (
@@ -1299,41 +1351,51 @@ def generate_workflow_audit_table(
                 diff_str = f" (+{pct:.0f}%)" if pct > 0 else f" ({pct:.0f}%)"
 
         # Alt for free and go recommendations
-        free_alt = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
-        go_alt = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
+        free_alt_raw = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
+        go_alt_raw = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
+        free_alt = _prefix_alt_tuple(free_alt_raw, go_ids)
+        go_alt = _prefix_alt_tuple(go_alt_raw, go_ids)
         # For free/go alt scores, bake diff_str in since format_model_with_score
         # no longer appends score_suffix to alt_score (avoids double-suffix)
         go_alt_score_baked = f"{go_alt[1]}{diff_str}" if go_alt and diff_str else (go_alt[1] if go_alt else None)
         free_alt_score_baked = f"{free_alt[1]}{diff_str}" if free_alt and diff_str else (free_alt[1] if free_alt else None)
 
+        # Determine alt models (best without multiplier) for status check
+        status_alts = []
+        if go_alt_raw:
+            status_alts.append(go_alt_raw[0])
+        if best_free and best_go and best_free == best_go and free_alt_raw:
+            status_alts.append(free_alt_raw[0])
+        status = classify_model_status(current, best_free, best_go, alt_models=status_alts or None)
+
         # Add trophy icon to the recommended model that is preferred
         if best_free and best_go and best_free == best_go:
             # Same model - show in both columns with trophy on free (preferred)
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
                 alt_score=free_alt[1] if free_alt else None,
             )
-            go_display = format_model_with_score(best_go, go_score)
+            go_display = format_model_with_score(best_go_disp, go_score)
         elif best_go and best_free:
             free_display = format_model_with_score(
-                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
                 alt_score=free_alt_score_baked if free_alt else None,
             )
             go_display = "\U0001f3c6 " + format_model_with_score(
-                best_go, go_score, score_suffix=diff_str,
+                best_go_disp, go_score, score_suffix=diff_str,
                 alt_model_id=go_alt[0] if go_alt else None,
                 alt_score=go_alt_score_baked if go_alt else None,
             )
         elif best_go:
             free_display = "\u2014"
             go_display = "\U0001f3c6 " + format_model_with_score(
-                best_go, go_score, score_suffix=diff_str,
+                best_go_disp, go_score, score_suffix=diff_str,
                 alt_model_id=go_alt[0] if go_alt else None,
                 alt_score=go_alt_score_baked if go_alt else None,
             )
         elif best_free:
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free, free_score, alt_model_id=free_alt[0] if free_alt else None,
+                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
                 alt_score=free_alt_score_baked if free_alt else None,
             )
             go_display = "\u2014"
@@ -1424,6 +1486,7 @@ def main():
     # All Zen models (free + paid) for benchmark scoring
     zen_data_obj = load_json(ZEN_MODELS_PATH) if ZEN_MODELS_PATH.exists() else {}
     all_zen_models = zen_data_obj.get("all", [])
+    go_ids = {m["id"] for m in go_models}
 
     model_table = generate_model_recommendation_table(
         task_types, free_models, go_models, livebench, threshold_pct,
@@ -1447,7 +1510,7 @@ def main():
     save_json(
         benchmark_path,
         {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "livebench_snapshot": livebench.get("_snapshot_date")
             if isinstance(livebench, dict)
             else None,
@@ -1494,7 +1557,35 @@ def main():
             threshold_pct,
         )
 
-        status = classify_model_status(current, best_free, best_go)
+        priority = next(
+            (t["priority"] for t in task_types if t["name"] == task_type), "overall"
+        )
+
+        # Compute alt (best without multiplier) for status check
+        status_alts = []
+        if best_go and has_token_multiplier(best_go):
+            go_scored = []
+            for m in all_zen_models:
+                if m["id"] not in go_ids:
+                    continue
+                s = get_model_score(m["id"], livebench, priority)
+                if s is not None:
+                    go_scored.append((m["id"], s))
+            go_scored.sort(key=lambda x: x[1], reverse=True)
+            go_alt = _find_best_without_multiplier(go_scored)
+            if go_alt:
+                status_alts.append(go_alt[0])
+        if best_free and best_go and best_free == best_go and has_token_multiplier(best_free):
+            free_scored = []
+            for m in free_models:
+                s = get_model_score(m["id"], livebench, priority)
+                if s is not None:
+                    free_scored.append((m["id"], s))
+            free_scored.sort(key=lambda x: x[1], reverse=True)
+            free_alt = _find_best_without_multiplier(free_scored)
+            if free_alt:
+                status_alts.append(free_alt[0])
+        status = classify_model_status(current, best_free, best_go, alt_models=status_alts or None)
 
         # Determine preferred tier and compute % diff
         if best_free and best_go and best_free == best_go:
@@ -1505,10 +1596,6 @@ def main():
             preferred_tier = "free"
         else:
             preferred_tier = None
-
-        priority = next(
-            (t["priority"] for t in task_types if t["name"] == task_type), "overall"
-        )
         free_score = (
             get_model_score(best_free, livebench, priority) if best_free else None
         )
@@ -1546,7 +1633,7 @@ def main():
     save_json(
         AUDIT_RESULTS_PATH,
         {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "livebench_snapshot": livebench.get("_snapshot_date")
             if isinstance(livebench, dict)
             else None,
@@ -1556,7 +1643,7 @@ def main():
             "livebench_models": len(_lb_models(livebench)),
             "free_models": len(free_models),
             "go_models": len(go_models),
-            "workflows_audited": len(set(r["file"] for r in scan_results)),
+            "workflows_audited": len({r["file"] for r in scan_results}),
             "steps_audited": len(scan_results),
             "results": audit_results,
         },
@@ -1578,7 +1665,7 @@ def main():
 
     print("=" * 60)
     print("Maintenance complete")
-    print(f"  Workflows audited: {len(set(r['file'] for r in scan_results))}")
+    print(f"  Workflows audited: {len({r['file'] for r in scan_results})}")
     print(f"  Steps checked: {len(scan_results)}")
     print(f"  LiveBench models: {len(_lb_models(livebench))}")
     if isinstance(livebench, dict) and livebench.get("_snapshot_date"):

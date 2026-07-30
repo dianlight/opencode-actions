@@ -35,6 +35,10 @@ jobs:
       - name: Lint YAML files
         run: yamllint .github .github/workflows config
 
+      # ── Lint Python files ──────────────────────────────────────────────────
+      - name: Lint Python files
+        run: ruff check scripts/
+
       # ── Run maintenance script ───────────────────────────────────────────
       # The script:
       #   1. Fetches OpenCode Zen (free) and Go (paid) model catalogs

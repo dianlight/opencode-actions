@@ -1,0 +1,9 @@
+target-version = "py314"
+line-length = 180
+
+[lint]
+select = ["UP", "F", "E", "W", "C4", "BLE", "FLY", "FURB"]
+ignore = []
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
