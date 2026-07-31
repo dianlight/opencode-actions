@@ -177,6 +177,13 @@ jobs:
                           cell += f" \u00b7 alt: `{prefixed(alt, tier)}`"
                   return cell
 
+              def rec_line(wf, job, current, model, tier, suffix):
+                  """Checkbox targeting a specific model (machine-detectable)."""
+                  return (
+                      f"- [ ] **`{wf}` / `{job}`** \u2014 "
+                      f"Change from `{current}` to `{prefixed(model, tier)}` {suffix}"
+                  )
+
               for r in suboptimal:
                   wf = r['workflow']
                   job = r['job']
@@ -191,23 +198,35 @@ jobs:
                   diff = r.get('preferred_diff')
                   diff_str = f" (+{diff}%)" if diff and diff > 0 else ""
                   if pref == 'go':
-                      recommendation = (
-                          f"{fmt_rec(rec_go, go_mult, rec_go_alt, 'go')} "
-                          f"(Go tier{diff_str})"
-                      )
+                      rec, mult, alt, tier = rec_go, go_mult, rec_go_alt, 'go'
+                      tier_label = f"Go tier{diff_str}"
                   elif pref == 'free':
-                      recommendation = (
-                          f"{fmt_rec(rec_free, free_mult, rec_free_alt, 'free')} "
-                          f"(Free tier)"
-                      )
+                      rec, mult, alt, tier = rec_free, free_mult, rec_free_alt, 'free'
+                      tier_label = "Free tier"
                   else:
                       rec_free_cell = fmt_rec(rec_free, free_mult, rec_free_alt, 'free')
                       rec_go_cell = fmt_rec(rec_go, go_mult, rec_go_alt, 'go')
                       recommendation = f"{rec_free_cell} or {rec_go_cell}"
-                  lines.append(
-                      f"- [ ] **`{wf}` / `{job}`** \u2014 "
-                      f"Change from `{current}` to {recommendation}"
-                  )
+                      lines.append(
+                          f"- [ ] **`{wf}` / `{job}`** \u2014 "
+                          f"Change from `{current}` to {recommendation}"
+                      )
+                      continue
+                  # Main recommendation checkbox
+                  main_suffix = f"({tier_label})"
+                  if mult and mult > 1.0:
+                      main_suffix = f"\u26a0\ufe0f x{mult:g} ({tier_label})"
+                  if mult and mult > 1.0 and alt:
+                      # Split into two actions: main model + alt without multiplier
+                      lines.append(rec_line(wf, job, current, rec, tier, main_suffix))
+                      lines.append(
+                          rec_line(
+                              wf, job, current, alt, tier,
+                              f"({tier_label} \u00b7 alt)",
+                          )
+                      )
+                  else:
+                      lines.append(rec_line(wf, job, current, rec, tier, main_suffix))
               lines.append("")
 
           if has_tasks:
@@ -374,6 +393,7 @@ jobs:
 
           TASKS=""
           JOB_IDS=""
+          JOB_MODELS=""
 
           # Detect search-missing-scores checkbox
           if grep -qE '^\s*- \[x] \*\*Search the web for missing score data\*\*' /tmp/issue_body.txt; then
@@ -389,10 +409,16 @@ jobs:
             fi
             JOB_IDS=$(grep -oE '\- \[x] \*\*`[^`]+` / `[^`]+`\*\*' /tmp/issue_body.txt | \
               sed 's/- \[x] \*\*`//;s/` \/ `/\//;s/`\*\*//' | paste -sd ',' -)
+            # Extract the checked target model per checkbox (" to `MODEL`").
+            # Main and alt checkboxes for the same job stay separate entries,
+            # positionally aligned with JOB_IDS.
+            JOB_MODELS=$(grep -oE '\- \[x] \*\*`[^`]+` / `[^`]+`\*\*.* to `[^`]+`' /tmp/issue_body.txt | \
+              sed 's/.* to `\([^`]*\)`.*/\1/' | paste -sd ',' -)
           fi
 
           echo "tasks=$TASKS" >> "$GITHUB_OUTPUT"
           echo "job_ids=$JOB_IDS" >> "$GITHUB_OUTPUT"
+          echo "job_models=$JOB_MODELS" >> "$GITHUB_OUTPUT"
 
       - name: No tasks checked
         if: steps.detect.outputs.tasks == ''
@@ -415,6 +441,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHECKED_TASKS: ${{ steps.detect.outputs.tasks }}
           CHECKED_JOB_IDS: ${{ steps.detect.outputs.job_ids }}
+          CHECKED_JOB_MODELS: ${{ steps.detect.outputs.job_models }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
           model: opencode-go/kimi-k2.6
@@ -425,6 +452,7 @@ jobs:
             Issue: #${{ github.event.issue.number }}
             Tasks: env \`CHECKED_TASKS\` (comma-separated list)
             Targeted jobs (for fix-suboptimal-configs): env \`CHECKED_JOB_IDS\`
+            Target model per targeted job (positionally aligned): env \`CHECKED_JOB_MODELS\`
 
             Read the issue body and its comments to find the checked tasks:
             \`gh issue view $ISSUE_NUMBER --json body,comments --jq .\`
@@ -438,12 +466,11 @@ jobs:
 
             If "fix-suboptimal-configs" is in CHECKED_TASKS:
             1. Read the "Suboptimal Workflow Configurations" section from the issue
-            2. For each targeted job (from CHECKED_JOB_IDS), update the workflow YAML file
-               to use the recommended model
-            3. If the recommended model has a token multiplier (\u26a0\ufe0f xN) and an
-               alternative is listed ("alt: ..."), also suggest the alternative in your
-               summary comment — prefer it when the multiplier makes the recommended
-               model impractical (e.g. high token cost)
+            2. Pair each targeted job (from CHECKED_JOB_IDS) with its checked target
+               model (from CHECKED_JOB_MODELS, same order) and update the workflow
+               YAML file to use EXACTLY that checked model — do not substitute
+            3. When both the main model and its alt checkbox are checked for the same
+               job, apply the main model and mention the alt in the summary comment
             4. Commit and push changes
             5. Run \`python scripts/opencode_maintenance.py\` to verify
 
