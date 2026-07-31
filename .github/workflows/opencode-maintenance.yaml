@@ -12,6 +12,8 @@ on:
       - .github/workflows/opencode-maintenance.yaml
   issues:
     types: [edited]
+  issue_comment:
+    types: [edited]
 
 # Permissions required to read files, update README.md, and manage Issues
 permissions:
@@ -21,7 +23,9 @@ permissions:
 
 jobs:
   model-audit:
-    if: github.event_name != 'issues'
+    if: >-
+      github.event_name != 'issues' &&
+      github.event_name != 'issue_comment'
     name: Model Audit
     runs-on: ubuntu-latest
     steps:
@@ -156,21 +160,50 @@ jobs:
                   "Each job below uses a non-optimal model. Check the ones you want fixed."
               )
               lines.append("")
+
+              def prefixed(mid, tier):
+                  """Prefix a raw model id for display (matches README style)."""
+                  if not mid or mid == '\u2014' or '/' in mid:
+                      return mid
+                  return f"opencode-go/{mid}" if tier == 'go' else f"opencode/{mid}"
+
+              def fmt_rec(mid, mult, alt, tier):
+                  """Recommendation cell with multiplier badge and alt (README rules)."""
+                  mid = prefixed(mid, tier)
+                  cell = f"`{mid}`"
+                  if mult and mult > 1.0:
+                      cell += f" \u26a0\ufe0f x{mult:g}"
+                      if alt:
+                          cell += f" \u00b7 alt: `{prefixed(alt, tier)}`"
+                  return cell
+
               for r in suboptimal:
                   wf = r['workflow']
                   job = r['job']
                   current = r['current_model']
                   rec_free = r.get('recommended_free') or '\u2014'
                   rec_go = r.get('recommended_go') or '\u2014'
+                  rec_free_alt = r.get('recommended_free_alt')
+                  rec_go_alt = r.get('recommended_go_alt')
+                  free_mult = r.get('recommended_free_multiplier')
+                  go_mult = r.get('recommended_go_multiplier')
                   pref = r.get('preferred_tier')
                   diff = r.get('preferred_diff')
                   diff_str = f" (+{diff}%)" if diff and diff > 0 else ""
                   if pref == 'go':
-                      recommendation = f"`{rec_go}` (Go tier{diff_str})"
+                      recommendation = (
+                          f"{fmt_rec(rec_go, go_mult, rec_go_alt, 'go')} "
+                          f"(Go tier{diff_str})"
+                      )
                   elif pref == 'free':
-                      recommendation = f"`{rec_free}` (Free tier)"
+                      recommendation = (
+                          f"{fmt_rec(rec_free, free_mult, rec_free_alt, 'free')} "
+                          f"(Free tier)"
+                      )
                   else:
-                      recommendation = f"`{rec_free}` or `{rec_go}`"
+                      rec_free_cell = fmt_rec(rec_free, free_mult, rec_free_alt, 'free')
+                      rec_go_cell = fmt_rec(rec_go, go_mult, rec_go_alt, 'go')
+                      recommendation = f"{rec_free_cell} or {rec_go_cell}"
                   lines.append(
                       f"- [ ] **`{wf}` / `{job}`** \u2014 "
                       f"Change from `{current}` to {recommendation}"
@@ -255,7 +288,10 @@ jobs:
           # Check if an open issue with label already exists
           EXISTING=$(gh issue list --label "maintenance" --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body-file /tmp/issue_body.md
+            # Update the issue BODY (not a comment) so the task checkboxes are
+            # interactive in the issue body and trigger the `issues: edited`
+            # event when checked.
+            gh issue edit "$EXISTING" --body-file /tmp/issue_body.md
             echo "\u2713 Updated existing issue #$EXISTING"
           else
             gh issue create \
@@ -305,7 +341,7 @@ jobs:
   handle-checkbox-task:
     name: Handle Checked Tasks
     if: >-
-      github.event_name == 'issues' &&
+      (github.event_name == 'issues' || github.event_name == 'issue_comment') &&
       github.event.action == 'edited' &&
       github.event.issue.state == 'open' &&
       contains(github.event.issue.labels.*.name, 'maintenance') &&
@@ -326,7 +362,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ISSUE_NUMBER=${{ github.event.issue.number }}
-          gh issue view "$ISSUE_NUMBER" --json body --jq .body > /tmp/issue_body.txt
+          # Checkboxes may live in the issue body (issues: edited) or in a
+          # maintenance report comment (issue_comment: edited). Read whichever
+          # was edited.
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            gh issue view "$ISSUE_NUMBER" --json body --jq .body > /tmp/issue_body.txt
+          else
+            gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" \
+              --jq .body > /tmp/issue_body.txt
+          fi
 
           TASKS=""
           JOB_IDS=""
@@ -382,20 +426,26 @@ jobs:
             Tasks: env \`CHECKED_TASKS\` (comma-separated list)
             Targeted jobs (for fix-suboptimal-configs): env \`CHECKED_JOB_IDS\`
 
-            Read the issue body with \`gh issue view $ISSUE_NUMBER --json body --jq .body\`.
+            Read the issue body and its comments to find the checked tasks:
+            \`gh issue view $ISSUE_NUMBER --json body,comments --jq .\`
+            The checked boxes (\`[x]\`) and the section headers are the source of truth.
 
             If "search-missing-scores" is in CHECKED_TASKS:
-            1. Read the "Models Missing Score Data" section from the issue body
+            1. Read the "Models Missing Score Data" section from the issue
             2. Search the web for benchmark scores for each listed model
             3. Update \`config/model-scores.yaml\` with the discovered scores
             4. Run \`python scripts/opencode_maintenance.py\` to verify
 
             If "fix-suboptimal-configs" is in CHECKED_TASKS:
-            1. Read the "Suboptimal Workflow Configurations" section from the issue body
+            1. Read the "Suboptimal Workflow Configurations" section from the issue
             2. For each targeted job (from CHECKED_JOB_IDS), update the workflow YAML file
                to use the recommended model
-            3. Commit and push changes
-            4. Run \`python scripts/opencode_maintenance.py\` to verify
+            3. If the recommended model has a token multiplier (\u26a0\ufe0f xN) and an
+               alternative is listed ("alt: ..."), also suggest the alternative in your
+               summary comment — prefer it when the multiplier makes the recommended
+               model impractical (e.g. high token cost)
+            4. Commit and push changes
+            5. Run \`python scripts/opencode_maintenance.py\` to verify
 
             IMPORTANT: After completing ALL tasks:
             1. Post a summary comment on the issue via \`gh issue comment\`

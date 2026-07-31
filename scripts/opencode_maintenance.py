@@ -1607,8 +1607,9 @@ def main() -> None:
             (t["priority"] for t in task_types if t["name"] == task_type), "overall"
         )
 
-        # Compute alt (best without multiplier) for status check
+        # Compute alt models (best without token multiplier) for status + display
         status_alts = []
+        go_alt_id = None
         if best_go and has_token_multiplier(best_go):
             go_scored = []
             for m in all_zen_models:
@@ -1620,8 +1621,10 @@ def main() -> None:
             go_scored.sort(key=lambda x: x[1], reverse=True)
             go_alt = _find_best_without_multiplier(go_scored)
             if go_alt:
-                status_alts.append(go_alt[0])
-        if best_free and best_go and best_free == best_go and has_token_multiplier(best_free):
+                go_alt_id = go_alt[0]
+                status_alts.append(go_alt_id)
+        free_alt_id = None
+        if best_free and has_token_multiplier(best_free):
             free_scored = []
             for m in free_models:
                 s = get_model_score(m["id"], livebench, priority)
@@ -1630,7 +1633,9 @@ def main() -> None:
             free_scored.sort(key=lambda x: x[1], reverse=True)
             free_alt = _find_best_without_multiplier(free_scored)
             if free_alt:
-                status_alts.append(free_alt[0])
+                free_alt_id = free_alt[0]
+                if best_go and best_free == best_go:
+                    status_alts.append(free_alt_id)
         status = classify_model_status(current, best_free, best_go, alt_models=status_alts or None)
 
         # Determine preferred tier and compute % diff
@@ -1670,6 +1675,14 @@ def main() -> None:
                 "current_model": current,
                 "recommended_free": best_free,
                 "recommended_go": best_go,
+                "recommended_free_alt": free_alt_id,
+                "recommended_go_alt": go_alt_id,
+                "recommended_free_multiplier": get_token_multiplier(best_free)
+                if best_free
+                else None,
+                "recommended_go_multiplier": get_token_multiplier(best_go)
+                if best_go
+                else None,
                 "preferred_tier": preferred_tier,
                 "preferred_diff": preferred_diff,
                 "status": status,

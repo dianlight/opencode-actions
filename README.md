@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-07-30 22:36 UTC**.
+> Last updated: **2026-07-31 09:47 UTC**.
 > LiveBench data: **121 models scored**.
 > LiveBench snapshot: **2026_01_08**.
 > Source: https://livebench.ai/table_2026_01_08.csv
@@ -39,6 +39,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `glm-5` | Go (Paid) | v LiveBench | Plan, Review | — | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
 | `glm-5.1` | Go (Paid) | v LiveBench | Plan, Review | — | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
 | `glm-5.2` | Go (Paid) | v LiveBench | Plan, Review | — | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
+| `gpt-5.6-luna` | Go (Paid) | x Missing | — | — | — | — | — | — | — |
 | `grok-4.5` | Go (Paid) | f Fallback | Code, Impl | — | 54.0 | 65.0 | 58.0 | 30.0 | 60.0 |
 | `hy3` | Go (Paid) | f Fallback | Plan, Review | — | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
 | `hy3-preview` | Go (Paid) | f Fallback | Plan, Review | — | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
@@ -65,7 +66,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-07-30 22:36 UTC**
+> Audited: **2026-07-31 09:47 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 
