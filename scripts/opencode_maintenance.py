@@ -735,10 +735,7 @@ def generate_model_config(
         # No committed config yet: the resolver fails closed without one, so
         # the proposal must land via PR too — never write it in place.
         save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
-        print(
-            f"  ! No committed config found — proposal saved to "
-            f"{MODEL_CONFIG_PROPOSED_PATH} (add via issue + PR review)"
-        )
+        print(f"  ! No committed config found — proposal saved to {MODEL_CONFIG_PROPOSED_PATH} (add via issue + PR review)")
         return True
 
     current = _load_model_config()
@@ -747,10 +744,7 @@ def generate_model_config(
         return False
 
     save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
-    print(
-        f"  ! Model config drift detected — NOT applied; proposal saved to "
-        f"{MODEL_CONFIG_PROPOSED_PATH}"
-    )
+    print(f"  ! Model config drift detected — NOT applied; proposal saved to {MODEL_CONFIG_PROPOSED_PATH}")
     print("  ! Committed data/model-config.json changes only via issue + PR review")
     return True
 
@@ -1966,10 +1960,7 @@ def main() -> None:
     print(f"  Audit data: {AUDIT_RESULTS_PATH}")
     print(f"  Model config: {MODEL_CONFIG_PATH}")
     if config_drift:
-        print(
-            f"  ! Config drift — proposal at "
-            f"{MODEL_CONFIG_PROPOSED_PATH} (requires PR)"
-        )
+        print(f"  ! Config drift — proposal at {MODEL_CONFIG_PROPOSED_PATH} (requires PR)")
     print("=" * 60)
 
     # Exit with error code if any \u274c (Error), \u2757 (Alert), or \U0001f480 (Fatal) found (for CI) or coverage issues
