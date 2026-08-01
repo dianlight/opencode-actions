@@ -7,5 +7,8 @@
   upgrades no longer require editing workflow files
 - Make model resolution fail closed: `.github/scripts/resolve-model.sh` has no default
   models and aborts the workflow when the config is unreachable or the entry is missing
+- Treat `data/model-config.json` as real configuration: the maintenance run never
+  overwrites it; drift is reported in a maintenance issue and applied only via a
+  reviewed PR (checking the issue box makes OpenCode open the PR)
 
 Resolves #12

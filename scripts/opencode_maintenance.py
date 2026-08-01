@@ -43,8 +43,11 @@ WORKFLOW_SCAN_PATH = DATA_DIR / "workflow_scan.json"
 AUDIT_RESULTS_PATH = DATA_DIR / "audit_results.json"
 COVERAGE_ISSUES_PATH = DATA_DIR / "coverage_issues.json"
 # Central model config consumed by downstream workflows at startup
-# (see .github/scripts/resolve-model.sh)
+# (see .github/scripts/resolve-model.sh). This is real configuration: the
+# maintenance run never overwrites it — changes go through issue + PR review.
 MODEL_CONFIG_PATH = DATA_DIR / "model-config.json"
+# Proposed config written when the run recommends a change (gitignored).
+MODEL_CONFIG_PROPOSED_PATH = DATA_DIR / "model-config.proposed.json"
 
 # --- Constants ---
 ZEN_URL = "https://opencode.ai/zen/v1/models"
@@ -689,13 +692,16 @@ def generate_model_config(
     audit_results: list[dict[str, Any]],
     go_ids: set[str],
     livebench: dict[str, Any],
-) -> dict[str, Any]:
-    """Generate data/model-config.json — the central per-workflow/job model map.
+) -> bool:
+    """Compute the proposed central model config — without applying it.
 
-    Each entry uses the audit recommendation for the step's task type
-    (prefixed, e.g. `opencode-go/kimi-k3`), falling back to the model currently
-    pinned in the workflow. Downstream workflows fetch this file at startup, so
-    model upgrades no longer require editing workflow files.
+    The committed data/model-config.json is the actual configuration and is
+    only changed through an issue + PR review, never automatically. Each entry
+    uses the audit recommendation for the step's task type (prefixed, e.g.
+    `opencode-go/kimi-k3`), falling back to the model currently pinned in the
+    workflow. Returns True when the proposal differs from the committed config
+    (drift): the proposal is saved to data/model-config.proposed.json so the
+    workflow can open a review issue, and the committed file is left untouched.
     """
     workflows: dict[str, Any] = {}
     for r, entry in zip(scan_results, audit_results):
@@ -717,16 +723,36 @@ def generate_model_config(
             "free": free_model,
         }
 
-    config = {
+    proposed = {
         "timestamp": datetime.now(UTC).isoformat(),
         "livebench_snapshot": livebench.get("_snapshot_date")
         if isinstance(livebench, dict)
         else None,
         "workflows": workflows,
     }
-    save_json(MODEL_CONFIG_PATH, config)
-    print(f"  v Central model config saved to {MODEL_CONFIG_PATH}")
-    return config
+
+    if not MODEL_CONFIG_PATH.exists():
+        # No committed config yet: the resolver fails closed without one, so
+        # the proposal must land via PR too — never write it in place.
+        save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
+        print(
+            f"  ! No committed config found — proposal saved to "
+            f"{MODEL_CONFIG_PROPOSED_PATH} (add via issue + PR review)"
+        )
+        return True
+
+    current = _load_model_config()
+    if (current.get("workflows") or {}) == proposed["workflows"]:
+        print("  v Central model config unchanged")
+        return False
+
+    save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
+    print(
+        f"  ! Model config drift detected — NOT applied; proposal saved to "
+        f"{MODEL_CONFIG_PROPOSED_PATH}"
+    )
+    print("  ! Committed data/model-config.json changes only via issue + PR review")
+    return True
 
 
 def classify_task_type(
@@ -1878,6 +1904,12 @@ def main() -> None:
             }
         )
 
+    # 7b. Compute the proposed central model config — never applied to the
+    # committed file; drift is reported (not applied) and flows into the issue.
+    config_drift = generate_model_config(
+        scan_results, audit_results, go_ids, livebench
+    )
+
     save_json(
         AUDIT_RESULTS_PATH,
         {
@@ -1893,12 +1925,21 @@ def main() -> None:
             "go_models": len(go_models),
             "workflows_audited": len({r["file"] for r in scan_results}),
             "steps_audited": len(scan_results),
+            "model_config_drift": {
+                "detected": config_drift,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "livebench_snapshot": livebench.get("_snapshot_date")
+                if isinstance(livebench, dict)
+                else None,
+                "current_workflows": (
+                    (_load_model_config().get("workflows") or {})
+                    if config_drift
+                    else {}
+                ),
+            },
             "results": audit_results,
         },
     )
-
-    # 7b. Generate the central model config consumed by downstream workflows
-    _ = generate_model_config(scan_results, audit_results, go_ids, livebench)
 
     # 8. Detect coverage issues (stale fallback, missing scores)
     print("-> Checking model coverage...")
@@ -1924,6 +1965,11 @@ def main() -> None:
     print(f"  README updated: {README_PATH}")
     print(f"  Audit data: {AUDIT_RESULTS_PATH}")
     print(f"  Model config: {MODEL_CONFIG_PATH}")
+    if config_drift:
+        print(
+            f"  ! Config drift — proposal at "
+            f"{MODEL_CONFIG_PROPOSED_PATH} (requires PR)"
+        )
     print("=" * 60)
 
     # Exit with error code if any \u274c (Error), \u2757 (Alert), or \U0001f480 (Fatal) found (for CI) or coverage issues
