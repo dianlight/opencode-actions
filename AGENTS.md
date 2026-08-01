@@ -14,13 +14,16 @@ This repo distributes GitHub Actions workflows to multiple downstream repositori
 
 ```bash
 # Python env (uses mise)
-mise install                  # installs python 3.14 + yamllint, pip installs requirements.txt
+mise install                  # installs python 3.14 + ruff + shellcheck + yamllint, pip installs requirements.txt
 
 # Lint YAML (also runs in CI via opencode-maintenance)
 mise run lint-yaml
 
 # Lint Python with ruff (also runs in CI via opencode-maintenance)
 mise run lint-python
+
+# Lint shell scripts with shellcheck (also runs in CI via opencode-maintenance)
+mise run lint-shell
 
 # Run the maintenance script (fetches models, updates README)
 mise run maintenance
@@ -34,18 +37,20 @@ python scripts/opencode_maintenance.py
 
 | Process | Workflow | Trigger |
 |---------|----------|---------|
-| 1 — PR Review | `opencode-pr-review.yml` | `/oc` or `/oc review` on a PR |
-| 2 — Bot thread reply | `opencode-pr-comment.yml` | Reply in a bot-owned review thread (no `/oc` needed) |
-| 3 — User thread takeover | `opencode-pr-comment.yml` | `/oc` in a human-owned review thread |
-| 4 — Issue review | `opencode-issue-handler.yml` | `/oc` or `/oc review` on an issue |
-| 5 — Issue implementation | `opencode-issue-handler.yml` | `/oc implement` on an issue |
-| 6 — PR task execution | `opencode-pr-comment.yml` | `/oc task` on a PR |
+| 1 — PR Review | `opencode-pr-review.yml` | `/oc` or `/ocf` on a PR (review) |
+| 2 — Bot thread reply | `opencode-pr-comment.yml` | Reply in a bot-owned review thread (no command needed; `/oc`/`/ocf` chooses tier) |
+| 3 — User thread takeover | `opencode-pr-comment.yml` | `/oc` or `/ocf` in a human-owned review thread |
+| 4 — Issue review | `opencode-issue-handler.yml` | `/oc` or `/ocf` on an issue (review) |
+| 5 — Issue implementation | `opencode-issue-handler.yml` | `/oc implement` or `/ocf implement` on an issue |
+| 6 — PR task execution | `opencode-pr-comment.yml` | `/oc task` or `/ocf task` on a PR |
+
+`/oc` runs the selected Go (paid) model; `/ocf` runs the free model. Both support the same subcommands (`review`, `implement`, `task`, `retry`).
 
 Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/COLLABORATOR`. Unknown users are silently skipped.
 
 ### Shared script
 
-`.github/scripts/auth.sh` parses `/oc` commands and outputs `IS_OC_COMMAND`, `SUBCOMMAND`, and `TASK_ARGS` via `GITHUB_OUTPUT`.
+`.github/scripts/auth.sh` parses `/oc` (Go model) and `/ocf` (free model) commands and outputs `IS_OC_COMMAND`, `TIER`, `SUBCOMMAND`, and `TASK_ARGS` via `GITHUB_OUTPUT`.
 
 ### Sync system
 
@@ -76,6 +81,7 @@ Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/
 
 - **Always run `mise run lint-yaml` after editing any YAML file** — the CI lints YAML and a `syntax error: could not find expected ':'` usually means a `|` block line broke out of the correct indent level
 - **Always run `mise run lint-python` after editing any Python file** — the CI checks Python with ruff
+- **Always run `mise run lint-shell` after editing any shell script** — the CI checks `.github/scripts/auth.sh` with shellcheck
 - Verify with `bash -n .github/scripts/auth.sh` after changing the shared auth script
 
 ## Renovate

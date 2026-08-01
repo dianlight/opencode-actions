@@ -14,13 +14,13 @@ flowchart TD
     B -- "pull_request_review" --> D
 
     C -- "Issue" --> E{"/oc subcommand?"}
-    E -- "/oc or /oc review" --> F["Process 4: Issue Review"]
+    E -- "/oc, /ocf or /oc review" --> F["Process 4: Issue Review"]
     E -- "/oc implement <info>" --> G["Process 5: Issue Work"]
 
     C -- "PR" --> H{"/oc subcommand?"}
-    H -- "/oc or /oc review" --> I["Process 1: PR Review"]
+    H -- "/oc, /ocf or /oc review" --> I["Process 1: PR Review"]
     H -- "/oc task <task>" --> J["Process 6: PR Task"]
-    H -- "other /oc" --> K{"Bot thread?"}
+    H -- "other /oc or /ocf" --> K{"Bot thread?"}
     K -- "yes" --> L["Process 2: Bot Thread Reply"]
     K -- "no" --> M["Process 3: User Thread Takeover"]
 
@@ -31,8 +31,10 @@ flowchart TD
 
 ## Process 1 — PR Review (On-Demand Code Review Gate)
 
-**Trigger:** Any comment starting with `/oc` on a PR (issue_comment event),
-except `/oc task` and `/oc implement` which are routed to other processes.
+**Trigger:** Any comment starting with `/oc` or `/ocf` on a PR
+(issue_comment event), except `/oc task`/`/ocf task` and
+`/oc implement`/`/ocf implement` which are routed to other processes.
+`/oc` runs the Go (paid) model, `/ocf` runs the free model.
 
 **Constraints:**
 - PR is not a draft
@@ -64,12 +66,12 @@ replies in the thread or pushes a commit if the user requests a fix.
 
 ## Process 3 — PR Discussion (User-Owned Thread Takeover)
 
-**Trigger:** `/oc` in a `pull_request_review_comment` thread NOT
+**Trigger:** `/oc` or `/ocf` in a `pull_request_review_comment` thread NOT
 originally created by the bot.
 
 **Constraints:**
 - Thread was created by a human
-- Comment contains `/oc`
+- Comment contains `/oc` or `/ocf`
 - User is OWNER, MEMBER, or COLLABORATOR
 
 **Actions:** Extracts thread history, assumes responsibility, drafts
@@ -82,7 +84,8 @@ that point on, further interactions follow Process 2 logic.
 
 ## Process 4 — Issue Review (No-Code Refining Phase)
 
-**Trigger:** `/oc` or `/oc review` on an issue (not a PR).
+**Trigger:** `/oc`, `/ocf` or `/oc review` on an issue (not a PR).
+`/oc` runs the Go (paid) model, `/ocf` runs the free model.
 
 **Constraints:**
 - Not a pull request
@@ -100,7 +103,8 @@ formatted markdown comments (strictly zero code changes).
 
 ## Process 5 — Issue Work (Task Orchestration & Scoping)
 
-**Trigger:** `/oc implement <information>` on an issue.
+**Trigger:** `/oc implement <information>` or `/ocf implement <information>`
+on an issue. `/oc` runs the Go (paid) model, `/ocf` runs the free model.
 
 **Constraints:**
 - Not a pull request
@@ -120,7 +124,8 @@ formatted markdown comments (strictly zero code changes).
 
 ## Process 6 — PR Task (Targeted Coding Execution)
 
-**Trigger:** `/oc task` or `/oc task <task>` on a PR.
+**Trigger:** `/oc task`, `/ocf task`, `/oc task <task>` or `/ocf task <task>`
+on a PR. `/oc` runs the Go (paid) model, `/ocf` runs the free model.
 
 **Constraints:**
 - Is a pull request
@@ -152,16 +157,20 @@ formatted markdown comments (strictly zero code changes).
 
 ### Authorization Script (`.github/scripts/auth.sh`)
 
-A reusable bash script that parses `/oc` command prefixes from
-comment bodies and determines the sub-command:
+A reusable bash script that parses `/oc` (Go/paid model) and `/ocf`
+(free model) command prefixes from comment bodies and determines the
+model tier and sub-command:
 
-| Input | `SUBCOMMAND` Output |
-|-------|---------------------|
-| `/oc` or `/oc review` | `discuss` / `review` |
-| `/oc implement <info>` | `implement` |
-| `/oc task <task>` | `task` |
-| `/oc task` | `task` |
-| Non-`/oc` comment | `none` |
+| Input | `TIER` | `SUBCOMMAND` Output |
+|-------|--------|---------------------|
+| `/oc` or `/oc review` | `go` | `discuss` / `review` |
+| `/ocf` or `/ocf review` | `free` | `discuss` / `review` |
+| `/oc implement <info>` | `go` | `implement` |
+| `/ocf implement <info>` | `free` | `implement` |
+| `/oc task <task>` | `go` | `task` |
+| `/ocf task <task>` | `free` | `task` |
+| `/oc task` / `/ocf task` | `go` / `free` | `task` |
+| Non-`/oc` comment | `go` | `none` |
 
 ### Bot Exclusion
 

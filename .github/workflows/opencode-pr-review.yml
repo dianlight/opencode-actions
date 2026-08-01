@@ -1,7 +1,8 @@
 name: opencode-pr-review
 
 # Process 1 — On-Demand PR Code Review Gate
-# Triggered when an authorized user comments /oc or /oc review on a PR.
+# Triggered when an authorized user comments /oc, /ocf, /oc review or /ocf review on a PR.
+# /oc → Go model, /ocf → free model.
 
 on:
   issue_comment:
@@ -24,7 +25,10 @@ jobs:
       startsWith(github.event.comment.body, '/oc') &&
       !contains(github.event.comment.body, '/oc task') &&
       !contains(github.event.comment.body, '/oc implement') &&
-      !contains(github.event.comment.body, '/oc retry')
+      !contains(github.event.comment.body, '/oc retry') &&
+      !contains(github.event.comment.body, '/ocf task') &&
+      !contains(github.event.comment.body, '/ocf implement') &&
+      !contains(github.event.comment.body, '/ocf retry')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -70,7 +74,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          model: opencode/deepseek-v4-flash-free
+          model: ${{ steps.parse.outputs.TIER == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/kimi-k3' }}
           use_github_token: true
           share: ${{ github.event.repository.private == false }}
           prompt: |
@@ -113,7 +117,7 @@ jobs:
             echo ""
             echo "Possible causes: timeout, temporary service issue, or insufficient credits."
             echo ""
-            echo "Reply with \`/oc retry\` to re-run this operation."
+            echo "Reply with \`/oc retry\` or \`/ocf retry\` to re-run this operation."
           } > /tmp/oc-feedback.md
           gh issue comment ${{ github.event.issue.number }} --body-file /tmp/oc-feedback.md
 

@@ -46,6 +46,10 @@ jobs:
       - name: Lint Python files
         run: ruff check scripts/
 
+      # ── Lint Shell scripts ─────────────────────────────────────────────────
+      - name: Lint Shell scripts
+        run: shellcheck .github/scripts/auth.sh
+
       # ── Run maintenance script ───────────────────────────────────────────
       # The script:
       #   1. Fetches OpenCode Zen (free) and Go (paid) model catalogs
@@ -466,7 +470,7 @@ jobs:
           CHECKED_JOB_MODELS: ${{ steps.detect.outputs.job_models }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
-          model: opencode-go/kimi-k2.6
+          model: opencode-go/kimi-k3
           prompt: |
             You are triggered by a user checking task checkboxes in a maintenance issue.
 

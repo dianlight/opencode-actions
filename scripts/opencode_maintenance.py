@@ -506,6 +506,28 @@ def fetch_livebench() -> dict[str, Any]:
 
 
 # --- Workflow Scanning ---
+# Conditional `model:` inputs look like:
+#   ${{ <expr> == 'free' && 'FREE_MODEL' || 'GO_MODEL' }}
+# The Go model is the primary (fallback side); the free model is the /ocf tier.
+MODEL_EXPR_RE = re.compile(
+    r"\$\{\{[^}]*&&\s*'([^']+)'\s*\|\|\s*'([^']+)'\s*\}\}"
+)
+
+
+def _parse_model_expression(model: str) -> tuple[str, str | None]:
+    """Split a conditional `model:` input into (go_model, free_model).
+
+    Workflows with the /oc (Go) and /ocf (free) split express the model as
+    `${{ <tier> == 'free' && '<FREE>' || '<GO>' }}`. This extracts the Go
+    model (the primary, used for auditing) and the free model. Plain literal
+    model pins are returned unchanged with free_model=None.
+    """
+    m = MODEL_EXPR_RE.search(model)
+    if m:
+        return m.group(2), m.group(1)
+    return model, None
+
+
 def scan_workflows() -> list[dict[str, Any]]:
     """Scan all workflows for anomalyco/opencode usage."""
     print("-> Scanning workflows for OpenCode usage...")
@@ -544,7 +566,9 @@ def scan_workflows() -> list[dict[str, Any]]:
                         continue
 
                     with_block = step.get("with") or {}
-                    model = str(with_block.get("model") or "NOT_SET")
+                    model, model_free = _parse_model_expression(
+                        str(with_block.get("model") or "NOT_SET")
+                    )
                     agent = str(with_block.get("agent") or "")
                     prompt = str(with_block.get("prompt") or "")[:500]
 
@@ -574,6 +598,7 @@ def scan_workflows() -> list[dict[str, Any]]:
                             "step_name": step.get("name") or f"step-{idx}",
                             "action_ref": uses,
                             "model": model,
+                            "model_free": model_free,
                             "agent": agent,
                             "prompt_preview": prompt,
                             "task_type": task_type,
@@ -1486,9 +1511,14 @@ def generate_workflow_audit_table(
         job = r.get("job_name", r["job_id"])
         step = r.get("step_name", f"step-{r['step_index']}")
 
+        # Show both tiers for steps with the /oc (Go) + /ocf (free) split
+        current_cell = f"`{current}`"
+        if r.get("model_free"):
+            current_cell += f" (`/ocf`: `{r['model_free']}`)"
+
         lines.append(
             f"| `{workflow}` | `{job}` | `{step}` | `{task_type}` | "
-            + f"`{current}` | {zen_display} | {free_display} | {go_display} | {status} |"
+            + f"{current_cell} | {zen_display} | {free_display} | {go_display} | {status} |"
         )
 
     lines.append("")
@@ -1709,6 +1739,7 @@ def main() -> None:
                 "step": r["step_name"],
                 "task_type": task_type,
                 "current_model": current,
+                "current_model_free": r.get("model_free"),
                 "recommended_free": best_free,
                 "recommended_go": best_go,
                 "recommended_free_alt": free_alt_id,

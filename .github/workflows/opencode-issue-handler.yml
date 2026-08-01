@@ -3,6 +3,7 @@ name: opencode-issue-handler
 # Processes 4 & 5 — Issue Review and Issue Work
 # Process 4: Issue Review / Refinement (read-only discussion)
 # Process 5: Issue Work / Task Orchestration (branch + PR creation)
+# /oc → Go model, /ocf → free model.
 
 on:
   issue_comment:
@@ -30,6 +31,7 @@ jobs:
     outputs:
       process: ${{ steps.route.outputs.process }}
       task_args: ${{ steps.parse.outputs.TASK_ARGS }}
+      tier: ${{ steps.parse.outputs.TIER }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -53,12 +55,12 @@ jobs:
           if [[ "$SUBCOMMAND" == "implement" ]]; then
             echo "process=process-5" >> "$GITHUB_OUTPUT"
           elif [[ "$SUBCOMMAND" == "retry" ]]; then
-            # Find the last non-retry /oc command and re-route
+            # Find the last non-retry /oc or /ocf command and re-route
             PREV_BODY=$(gh api \
               "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-              --jq '[.[] | select(.body | startswith("/oc")) | .body] | map(select(startswith("/oc retry") | not)) | last')
+              --jq '[.[] | select(.body | test("^/ocf?( |$)")) | .body] | map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) | last')
             if [[ -n "$PREV_BODY" ]]; then
-              if echo "$PREV_BODY" | grep -qE '^/oc[[:space:]]+implement'; then
+              if echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+implement'; then
                 echo "process=process-5" >> "$GITHUB_OUTPUT"
               else
                 echo "process=process-4" >> "$GITHUB_OUTPUT"
@@ -98,7 +100,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
         with:
-          model: opencode-go/qwen3.7-max
+          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/qwen3.7-max' }}
           prompt: |
             You are Process 4: Issue Review & Refinement. Read-only.
             Output is issue timeline comments only.
@@ -135,7 +137,7 @@ jobs:
             echo ""
             echo "Possible causes: timeout, temporary service issue, or insufficient credits."
             echo ""
-            echo "Reply with \`/oc retry\` to re-run this operation."
+            echo "Reply with \`/oc retry\` or \`/ocf retry\` to re-run this operation."
           } > /tmp/oc-feedback.md
           gh issue comment ${{ github.event.issue.number }} --body-file /tmp/oc-feedback.md
 
@@ -199,13 +201,13 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
-          model: opencode/deepseek-v4-flash-free
+          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/nemotron-3-ultra-free' || 'opencode-go/kimi-k3' }}
           use_github_token: true
           prompt: |
             You are Process 5: Issue Work — Task Orchestration.
 
             ## Rules
-            - Authorized via /oc implement. MUST implement, branch, PR.
+            - Authorized via /oc implement or /ocf implement. MUST implement, branch, PR.
             - Atomic commits with conventional headers.
 
             ## Context
@@ -243,7 +245,7 @@ jobs:
             echo ""
             echo "Possible causes: timeout, temporary service issue, or insufficient credits."
             echo ""
-            echo "Reply with \`/oc retry\` to re-run this operation."
+            echo "Reply with \`/oc retry\` or \`/ocf retry\` to re-run this operation."
           } > /tmp/oc-feedback.md
           gh issue comment ${{ github.event.issue.number }} --body-file /tmp/oc-feedback.md
 

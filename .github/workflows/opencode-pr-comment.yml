@@ -2,8 +2,9 @@ name: opencode-pr-comment
 
 # Processes 2, 3 & 6 — PR Thread Discussions and Targeted Task Execution
 # Process 2: Auto-reply in threads opened by Opencode (no /oc required)
-# Process 3: Take over user-owned threads when /oc is used
-# Process 6: Execute /oc task against PR checklist
+# Process 3: Take over user-owned threads when /oc or /ocf is used
+# Process 6: Execute /oc task or /ocf task against PR checklist
+# /oc → Go model, /ocf → free model.
 
 on:
   issue_comment:
@@ -32,6 +33,7 @@ jobs:
       issues: write
     outputs:
       process: ${{ steps.route.outputs.process }}
+      tier: ${{ steps.parse.outputs.TIER }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -61,12 +63,12 @@ jobs:
             ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
             PREV_BODY=$(gh api \
               "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
-              --jq '[.[] | select(.body | startswith("/oc")) | .body] | map(select(startswith("/oc retry") | not)) | last' 2>/dev/null || echo "")
+              --jq '[.[] | select(.body | test("^/ocf?( |$)")) | .body] | map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) | last' 2>/dev/null || echo "")
 
             if [[ -n "$PREV_BODY" ]]; then
-              if echo "$PREV_BODY" | grep -qE '^/oc[[:space:]]+task'; then
+              if echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+task'; then
                 PROCESS="process-6"
-              elif echo "$PREV_BODY" | grep -qE '^/oc[[:space:]]+implement'; then
+              elif echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+implement'; then
                 PROCESS="process-3"
               else
                 PROCESS="process-2"
@@ -162,7 +164,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
         with:
-          model: opencode/deepseek-v4-flash-free
+          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/kimi-k3' }}
           use_github_token: true
           prompt: |
             You are Process 2: PR Discussion (Bot Thread Reply).
@@ -197,7 +199,7 @@ jobs:
             echo ""
             echo "Possible causes: timeout, temporary service issue, or insufficient credits."
             echo ""
-            echo "Reply with \`/oc retry\` to re-run."
+            echo "Reply with \`/oc retry\` or \`/ocf retry\` to re-run."
           } > /tmp/oc-feedback.md
           gh issue comment "$ISSUE_NUM" --body-file /tmp/oc-feedback.md
 
@@ -255,13 +257,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
         with:
-          model: opencode/deepseek-v4-flash-free
+          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/kimi-k3' }}
           use_github_token: true
           prompt: |
             You are Process 3: PR Discussion (User Thread Takeover).
 
             ## Rules
-            - User invoked /oc in a human-owned thread.
+            - User invoked /oc or /ocf in a human-owned thread.
             - Fix requested — checkout PR branch, implement, commit, push, reply.
             - Analysis/clarification — reply inline.
 
@@ -289,7 +291,7 @@ jobs:
             echo ""
             echo "Possible causes: timeout, temporary service issue, or insufficient credits."
             echo ""
-            echo "Reply with \`/oc retry\` to re-run."
+            echo "Reply with \`/oc retry\` or \`/ocf retry\` to re-run."
           } > /tmp/oc-feedback.md
           gh issue comment "$ISSUE_NUM" --body-file /tmp/oc-feedback.md
 
@@ -359,7 +361,7 @@ jobs:
           ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
           PREV_BODY=$(gh api \
             "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
-            --jq '[.[] | select(.body | startswith("/oc")) | .body] | map(select(startswith("/oc retry") | not)) | last')
+            --jq '[.[] | select(.body | test("^/ocf?( |$)")) | .body] | map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) | last')
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
           .github/scripts/auth.sh "$PREV_BODY"
 
@@ -373,7 +375,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TASK_ARGS: ${{ steps.retry-parse.outputs.TASK_ARGS || steps.parse.outputs.TASK_ARGS }}
         with:
-          model: opencode-go/kimi-k2.6
+          model: ${{ (steps.parse.outputs.TIER || steps.retry-parse.outputs.TIER) == 'free' && 'opencode/nemotron-3-ultra-free' || 'opencode-go/kimi-k3' }}
           use_github_token: true
           prompt: |
             You are Process 6: PR Task Execution.
@@ -411,7 +413,7 @@ jobs:
             echo ""
             echo "Possible causes: timeout, temporary service issue, or insufficient credits."
             echo ""
-            echo "Reply with \`/oc retry\` to re-run."
+            echo "Reply with \`/oc retry\` or \`/ocf retry\` to re-run."
           } > /tmp/oc-feedback.md
           gh issue comment "$ISSUE_NUM" --body-file /tmp/oc-feedback.md
 
