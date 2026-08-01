@@ -48,7 +48,7 @@ jobs:
 
       # ── Lint Shell scripts ─────────────────────────────────────────────────
       - name: Lint Shell scripts
-        run: shellcheck .github/scripts/auth.sh
+        run: shellcheck .github/scripts/auth.sh .github/scripts/resolve-model.sh
 
       # ── Run maintenance script ───────────────────────────────────────────
       # The script:
@@ -456,6 +456,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Resolve model
+        id: resolve
+        if: steps.detect.outputs.tasks != ''
+        run: |
+          chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
+          .github/scripts/resolve-model.sh opencode-maintenance handle-checkbox-task "go"
+
       - name: Run OpenCode for checked tasks
         if: steps.detect.outputs.tasks != ''
         id: opencode
@@ -470,7 +477,7 @@ jobs:
           CHECKED_JOB_MODELS: ${{ steps.detect.outputs.job_models }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
-          model: opencode-go/kimi-k3
+          model: ${{ steps.resolve.outputs.MODEL }}
           prompt: |
             You are triggered by a user checking task checkboxes in a maintenance issue.
 

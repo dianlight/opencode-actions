@@ -153,6 +153,14 @@ jobs:
             echo "::warning::Not a bot thread — skipping Process 2"
           fi
 
+      - name: Resolve model
+        id: resolve
+        env:
+          TIER: ${{ needs.route.outputs.tier }}
+        run: |
+          chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
+          .github/scripts/resolve-model.sh opencode-pr-comment process-2 "${TIER}"
+
       - name: Run opencode (Process 2 — Bot thread reply)
         id: opencode
         if: steps.thread-check.outputs.is_bot_thread == 'true'
@@ -164,7 +172,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
         with:
-          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/kimi-k3' }}
+          model: ${{ steps.resolve.outputs.MODEL }}
           use_github_token: true
           prompt: |
             You are Process 2: PR Discussion (Bot Thread Reply).
@@ -247,6 +255,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Resolve model
+        id: resolve
+        env:
+          TIER: ${{ needs.route.outputs.tier }}
+        run: |
+          chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
+          .github/scripts/resolve-model.sh opencode-pr-comment process-3 "${TIER}"
+
       - name: Run opencode (Process 3 — User-owned thread takeover)
         id: opencode
         continue-on-error: true
@@ -257,7 +273,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
         with:
-          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/kimi-k3' }}
+          model: ${{ steps.resolve.outputs.MODEL }}
           use_github_token: true
           prompt: |
             You are Process 3: PR Discussion (User Thread Takeover).
@@ -365,6 +381,14 @@ jobs:
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
           .github/scripts/auth.sh "$PREV_BODY"
 
+      - name: Resolve model
+        id: resolve
+        env:
+          TIER: ${{ steps.parse.outputs.TIER || steps.retry-parse.outputs.TIER }}
+        run: |
+          chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
+          .github/scripts/resolve-model.sh opencode-pr-comment process-6 "${TIER}"
+
       - name: Run opencode (Process 6 — PR Task Execution)
         id: opencode
         continue-on-error: true
@@ -375,7 +399,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TASK_ARGS: ${{ steps.retry-parse.outputs.TASK_ARGS || steps.parse.outputs.TASK_ARGS }}
         with:
-          model: ${{ (steps.parse.outputs.TIER || steps.retry-parse.outputs.TIER) == 'free' && 'opencode/nemotron-3-ultra-free' || 'opencode-go/kimi-k3' }}
+          model: ${{ steps.resolve.outputs.MODEL }}
           use_github_token: true
           prompt: |
             You are Process 6: PR Task Execution.

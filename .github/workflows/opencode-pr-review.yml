@@ -64,6 +64,14 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve model
+        id: resolve
+        env:
+          TIER: ${{ steps.parse.outputs.TIER }}
+        run: |
+          chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
+          .github/scripts/resolve-model.sh opencode-pr-review review "${TIER}"
+
       - name: Run opencode (PR code review)
         id: opencode
         if: steps.pr-check.outputs.skip != 'true'
@@ -74,7 +82,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          model: ${{ steps.parse.outputs.TIER == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/kimi-k3' }}
+          model: ${{ steps.resolve.outputs.MODEL }}
           use_github_token: true
           share: ${{ github.event.repository.private == false }}
           prompt: |

@@ -42,6 +42,9 @@ LIVEBENCH_PATH = DATA_DIR / "livebench.json"
 WORKFLOW_SCAN_PATH = DATA_DIR / "workflow_scan.json"
 AUDIT_RESULTS_PATH = DATA_DIR / "audit_results.json"
 COVERAGE_ISSUES_PATH = DATA_DIR / "coverage_issues.json"
+# Central model config consumed by downstream workflows at startup
+# (see .github/scripts/resolve-model.sh)
+MODEL_CONFIG_PATH = DATA_DIR / "model-config.json"
 
 # --- Constants ---
 ZEN_URL = "https://opencode.ai/zen/v1/models"
@@ -512,6 +515,10 @@ def fetch_livebench() -> dict[str, Any]:
 MODEL_EXPR_RE = re.compile(
     r"\$\{\{[^}]*&&\s*'([^']+)'\s*\|\|\s*'([^']+)'\s*\}\}"
 )
+# Resolver reference: model: ${{ steps.<id>.outputs.<NAME> }} — the model is
+# resolved at workflow runtime from the central config (data/model-config.json)
+# via .github/scripts/resolve-model.sh.
+AUTO_MODEL_RE = re.compile(r"\$\{\{\s*steps\.[^}]*\.outputs\.[^}]*\}\}")
 
 
 def _parse_model_expression(model: str) -> tuple[str, str | None]:
@@ -521,10 +528,16 @@ def _parse_model_expression(model: str) -> tuple[str, str | None]:
     `${{ <tier> == 'free' && '<FREE>' || '<GO>' }}`. This extracts the Go
     model (the primary, used for auditing) and the free model. Plain literal
     model pins are returned unchanged with free_model=None.
+
+    Steps that resolve the model at runtime from the central config
+    (`${{ steps.<id>.outputs.MODEL }}`) return ("__auto__", "__auto__");
+    the caller resolves them from data/model-config.json.
     """
     m = MODEL_EXPR_RE.search(model)
     if m:
         return m.group(2), m.group(1)
+    if AUTO_MODEL_RE.search(model):
+        return "__auto__", "__auto__"
     return model, None
 
 
@@ -569,6 +582,17 @@ def scan_workflows() -> list[dict[str, Any]]:
                     model, model_free = _parse_model_expression(
                         str(with_block.get("model") or "NOT_SET")
                     )
+                    # Resolver-based steps get their model from the central
+                    # config at runtime; resolve it here for auditing.
+                    auto = model == "__auto__"
+                    if auto:
+                        resolved_go, resolved_free = resolve_auto_models(
+                            wf_file.stem, job_id
+                        )
+                        if resolved_go:
+                            model, model_free = resolved_go, resolved_free
+                        else:
+                            model_free = None
                     agent = str(with_block.get("agent") or "")
                     prompt = str(with_block.get("prompt") or "")[:500]
 
@@ -599,6 +623,7 @@ def scan_workflows() -> list[dict[str, Any]]:
                             "action_ref": uses,
                             "model": model,
                             "model_free": model_free,
+                            "auto": auto,
                             "agent": agent,
                             "prompt_preview": prompt,
                             "task_type": task_type,
@@ -619,6 +644,89 @@ def scan_workflows() -> list[dict[str, Any]]:
     save_json(WORKFLOW_SCAN_PATH, results)
     print(f"  v Found {len(results)} OpenCode step(s) across workflows")
     return results
+
+
+# Central Model Config ---
+# The maintenance run writes data/model-config.json — the single source of
+# truth for which model each workflow/job runs. Downstream workflows fetch it
+# at startup via .github/scripts/resolve-model.sh, which fails closed: no
+# default models exist, so an unreachable or missing config aborts the step.
+_MODEL_CONFIG_CACHE: dict[str, Any] | None = None
+
+
+def _load_model_config() -> dict[str, Any]:
+    """Load the committed central model config (cached per run)."""
+    global _MODEL_CONFIG_CACHE
+    if _MODEL_CONFIG_CACHE is None:
+        _MODEL_CONFIG_CACHE = {}
+        if MODEL_CONFIG_PATH.exists():
+            try:
+                _MODEL_CONFIG_CACHE = load_json(MODEL_CONFIG_PATH)
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"  w Failed to read {MODEL_CONFIG_PATH}: {e}")
+    assert _MODEL_CONFIG_CACHE is not None
+    return _MODEL_CONFIG_CACHE
+
+
+def resolve_auto_models(
+    workflow_stem: str, job_id: str
+) -> tuple[str | None, str | None]:
+    """Resolve the (go, free) models for a resolver-based workflow step from
+    the central config. Returns (None, None) when no entry exists (e.g. on the
+    first run before the config has been generated)."""
+    entry = (
+        (_load_model_config().get("workflows") or {})
+        .get(workflow_stem, {})
+        .get(job_id)
+    )
+    if not entry:
+        return None, None
+    return entry.get("go"), entry.get("free")
+
+
+def generate_model_config(
+    scan_results: list[dict[str, Any]],
+    audit_results: list[dict[str, Any]],
+    go_ids: set[str],
+    livebench: dict[str, Any],
+) -> dict[str, Any]:
+    """Generate data/model-config.json — the central per-workflow/job model map.
+
+    Each entry uses the audit recommendation for the step's task type
+    (prefixed, e.g. `opencode-go/kimi-k3`), falling back to the model currently
+    pinned in the workflow. Downstream workflows fetch this file at startup, so
+    model upgrades no longer require editing workflow files.
+    """
+    workflows: dict[str, Any] = {}
+    for r, entry in zip(scan_results, audit_results):
+        if "error" in r or "job_id" not in r:
+            continue
+        stem = Path(r["file"]).stem
+        go_model = None
+        free_model = None
+        if entry.get("recommended_go"):
+            go_model = _add_model_prefix(entry["recommended_go"], go_ids)
+        elif entry.get("current_model") and entry["current_model"] != "__auto__":
+            go_model = entry["current_model"]
+        if entry.get("recommended_free"):
+            free_model = _add_model_prefix(entry["recommended_free"], go_ids)
+        elif entry.get("current_model_free") and entry["current_model_free"] != "__auto__":
+            free_model = entry["current_model_free"]
+        workflows.setdefault(stem, {})[r["job_id"]] = {
+            "go": go_model,
+            "free": free_model,
+        }
+
+    config = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "livebench_snapshot": livebench.get("_snapshot_date")
+        if isinstance(livebench, dict)
+        else None,
+        "workflows": workflows,
+    }
+    save_json(MODEL_CONFIG_PATH, config)
+    print(f"  v Central model config saved to {MODEL_CONFIG_PATH}")
+    return config
 
 
 def classify_task_type(
@@ -1512,9 +1620,14 @@ def generate_workflow_audit_table(
         step = r.get("step_name", f"step-{r['step_index']}")
 
         # Show both tiers for steps with the /oc (Go) + /ocf (free) split
-        current_cell = f"`{current}`"
-        if r.get("model_free"):
-            current_cell += f" (`/ocf`: `{r['model_free']}`)"
+        if current == "__auto__":
+            current_cell = "`auto` (central config)"
+        else:
+            current_cell = f"`{current}`"
+            if r.get("model_free"):
+                current_cell += f" (`/ocf`: `{r['model_free']}`)"
+            if r.get("auto"):
+                current_cell += " \u2699\ufe0f"
 
         lines.append(
             f"| `{workflow}` | `{job}` | `{step}` | `{task_type}` | "
@@ -1529,6 +1642,8 @@ def generate_workflow_audit_table(
         + "\U0001f480 Fatal (model not set). "
         + "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free). "
         + "\u26a0\ufe0f xN marks models with elevated token consumption. "
+        + "\u2699\ufe0f marks steps resolved at runtime from the central config "
+        + "(`data/model-config.json`). "
         + "Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._"
     )
 
@@ -1702,7 +1817,13 @@ def main() -> None:
                 free_alt_id = free_alt[0]
                 if best_go and best_free == best_go:
                     status_alts.append(free_alt_id)
-        status = classify_model_status(current, best_free, best_go, alt_models=status_alts or None)
+
+        # Resolver-based steps (model from central config) that could not be
+        # resolved from the committed config are treated as optimal.
+        if current == "__auto__":
+            status = "\u2705"
+        else:
+            status = classify_model_status(current, best_free, best_go, alt_models=status_alts or None)
 
         # Determine preferred tier and compute % diff
         if best_free and best_go and best_free == best_go:
@@ -1740,6 +1861,7 @@ def main() -> None:
                 "task_type": task_type,
                 "current_model": current,
                 "current_model_free": r.get("model_free"),
+                "auto": r.get("auto", False),
                 "recommended_free": best_free,
                 "recommended_go": best_go,
                 "recommended_free_alt": free_alt_id,
@@ -1775,6 +1897,9 @@ def main() -> None:
         },
     )
 
+    # 7b. Generate the central model config consumed by downstream workflows
+    _ = generate_model_config(scan_results, audit_results, go_ids, livebench)
+
     # 8. Detect coverage issues (stale fallback, missing scores)
     print("-> Checking model coverage...")
     coverage = detect_coverage_issues(free_models, go_models, livebench)
@@ -1798,6 +1923,7 @@ def main() -> None:
         print(f"  LiveBench snapshot: {livebench['_snapshot_date']}")
     print(f"  README updated: {README_PATH}")
     print(f"  Audit data: {AUDIT_RESULTS_PATH}")
+    print(f"  Model config: {MODEL_CONFIG_PATH}")
     print("=" * 60)
 
     # Exit with error code if any \u274c (Error), \u2757 (Alert), or \U0001f480 (Fatal) found (for CI) or coverage issues

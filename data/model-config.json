@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-08-01T09:28:05.392448+00:00",
+  "livebench_snapshot": "2026_06_25",
+  "workflows": {
+    "opencode-issue-handler": {
+      "process-4": {
+        "go": "opencode-go/qwen3.7-max",
+        "free": "opencode/deepseek-v4-flash-free"
+      },
+      "process-5": {
+        "go": "opencode-go/kimi-k3",
+        "free": "opencode/nemotron-3-ultra-free"
+      }
+    },
+    "opencode-maintenance": {
+      "handle-checkbox-task": {
+        "go": "opencode-go/kimi-k3",
+        "free": "opencode/nemotron-3-ultra-free"
+      }
+    },
+    "opencode-pr-comment": {
+      "process-2": {
+        "go": "opencode-go/kimi-k3",
+        "free": "opencode/deepseek-v4-flash-free"
+      },
+      "process-3": {
+        "go": "opencode-go/kimi-k3",
+        "free": "opencode/deepseek-v4-flash-free"
+      },
+      "process-6": {
+        "go": "opencode-go/kimi-k3",
+        "free": "opencode/nemotron-3-ultra-free"
+      }
+    },
+    "opencode-pr-review": {
+      "review": {
+        "go": "opencode-go/kimi-k3",
+        "free": "opencode/deepseek-v4-flash-free"
+      }
+    }
+  }
+}

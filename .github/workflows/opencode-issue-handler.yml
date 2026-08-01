@@ -90,6 +90,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Resolve model
+        id: resolve
+        env:
+          TIER: ${{ needs.route.outputs.tier }}
+        run: |
+          chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
+          .github/scripts/resolve-model.sh opencode-issue-handler process-4 "${TIER}"
+
       - name: Run opencode (Process 4 — Issue Review & Refinement)
         id: opencode
         continue-on-error: true
@@ -100,7 +108,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
         with:
-          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/deepseek-v4-flash-free' || 'opencode-go/qwen3.7-max' }}
+          model: ${{ steps.resolve.outputs.MODEL }}
           prompt: |
             You are Process 4: Issue Review & Refinement. Read-only.
             Output is issue timeline comments only.
@@ -188,6 +196,14 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Resolve model
+        id: resolve
+        env:
+          TIER: ${{ needs.route.outputs.tier }}
+        run: |
+          chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
+          .github/scripts/resolve-model.sh opencode-issue-handler process-5 "${TIER}"
+
       - name: Run opencode (Process 5 — Issue Work & PR Creation)
         id: opencode
         continue-on-error: true
@@ -201,7 +217,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
-          model: ${{ needs.route.outputs.tier == 'free' && 'opencode/nemotron-3-ultra-free' || 'opencode-go/kimi-k3' }}
+          model: ${{ steps.resolve.outputs.MODEL }}
           use_github_token: true
           prompt: |
             You are Process 5: Issue Work — Task Orchestration.
