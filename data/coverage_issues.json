@@ -1,9 +1,4 @@
 {
   "stale_fallback": [],
-  "missing_scores": [
-    {
-      "model": "gpt-5.6-luna",
-      "tier": "Go (Paid)"
-    }
-  ]
+  "missing_scores": []
 }

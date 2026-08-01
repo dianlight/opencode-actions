@@ -2,7 +2,9 @@
 """
 OpenCode Maintenance Script
 - Fetches OpenCode model catalogs (Zen free + Go paid)
-- Fetches LiveBench leaderboard data
+- Fetches LiveBench leaderboard data (newest snapshot from livebench.ai,
+  merged with models from older snapshots; snapshot dates are discovered
+  from the official LiveBench/livebench.github.io repo)
 - Classifies workflows by task type
 - Scores and recommends optimal models per task type
 - Updates README.md with recommendation tables
@@ -14,7 +16,7 @@ import io
 import json
 import re
 import sys
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -45,13 +47,19 @@ COVERAGE_ISSUES_PATH = DATA_DIR / "coverage_issues.json"
 ZEN_URL = "https://opencode.ai/zen/v1/models"
 GO_URL = "https://opencode.ai/zen/go/v1/models"
 LIVEBENCH_BASE = "https://livebench.ai"
+# LiveBench/LiveBench changelog is a secondary date hint (lags the live site)
 LIVEBENCH_CHANGELOG_URL = (
     "https://raw.githubusercontent.com/LiveBench/LiveBench/main/changelog.md"
 )
-LIVEBENCH_JSON_URLS = [
-    "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/all_models_df.json",
-    "https://raw.githubusercontent.com/LiveBench/LiveBench/main/livebench/leaderboard/data/leaderboard.json",
-]
+# The live site (livebench.ai) is GitHub Pages from LiveBench/livebench.github.io;
+# its git tree is the authoritative, machine-readable list of published snapshots.
+LIVEBENCH_GITHUB_IO_TREE_URL = (
+    "https://api.github.com/repos/LiveBench/livebench.github.io/git/trees/main?recursive=1"
+)
+# Mirror host for the same CSVs (used if livebench.ai is unreachable)
+LIVEBENCH_GITHUB_IO_RAW_BASE = (
+    "https://raw.githubusercontent.com/LiveBench/livebench.github.io/main/public"
+)
 
 FREE_FIRST_THRESHOLD_PCT = 5  # % within best paid to prefer free
 
@@ -261,9 +269,15 @@ def fetch_text(url: str, timeout: int = 15) -> str | None:
 
 
 def fetch_livebench_csv(date_str: str) -> str | None:
-    """Try to fetch LiveBench CSV for a specific date."""
-    url = f"{LIVEBENCH_BASE}/table_{date_str}.csv"
-    return fetch_text(url)
+    """Try to fetch LiveBench CSV for a specific date.
+
+    Tries livebench.ai first, then falls back to the raw CSV in the
+    LiveBench/livebench.github.io repo (the site's GitHub Pages source).
+    """
+    text = fetch_text(f"{LIVEBENCH_BASE}/table_{date_str}.csv")
+    if text:
+        return text
+    return fetch_text(f"{LIVEBENCH_GITHUB_IO_RAW_BASE}/table_{date_str}.csv")
 
 
 def _to_float(v: Any) -> float | None:
@@ -356,117 +370,139 @@ def fetch_opencode_models() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
     return free_models, go_models
 
 
-def get_latest_livebench_date() -> str | None:
-    """Parse the latest snapshot date from the LiveBench changelog.
+def _discover_dates_from_tree() -> list[str]:
+    """List every published snapshot date from the LiveBench site repo's git tree.
 
-    The changelog uses `### YYYY-MM-DD` headers; the first one is the most recent.
-    Returns the date in `YYYY_MM_DD` format (for use in the CSV URL), or None.
+    Queries the GitHub API for the recursive git tree of
+    LiveBench/livebench.github.io and regexes every `table_YYYY_MM_DD.csv`
+    file under `public/`. This is the authoritative, machine-readable source of
+    all snapshots available on livebench.ai (the changelog lags the live site).
+    Returns dates as `YYYY_MM_DD` strings, newest first.
+    """
+    data = fetch_json(LIVEBENCH_GITHUB_IO_TREE_URL)
+    if not data:
+        return []
+    dates: set[str] = set()
+    for entry in data.get("tree", []):
+        path = entry.get("path", "")
+        m = re.search(r"table_(\d{4}_\d{2}_\d{2})\.csv$", path)
+        if m:
+            dates.add(m.group(1))
+    return sorted(dates, reverse=True)
+
+
+def _parse_changelog_dates() -> list[str]:
+    """Parse snapshot dates from the LiveBench changelog (newest first).
+
+    The changelog uses `### YYYY-MM-DD` headers. It is a secondary hint only:
+    it often lags the snapshots actually published on livebench.ai.
     """
     text = fetch_text(LIVEBENCH_CHANGELOG_URL)
     if not text:
-        return None
-    # Find all `### YYYY-MM-DD` headers in order
+        return []
     matches = re.findall(r"^###\s+(\d{4}-\d{2}-\d{2})\s*$", text, re.MULTILINE)
-    if not matches:
-        return None
-    # Changelog is ordered newest-first, so matches[0] is the latest
-    return matches[0].replace("-", "_")
+    return [d.replace("-", "_") for d in matches]
+
+
+def _probe_recent_dates(days_back: int = 180) -> list[str]:
+    """Last-resort discovery: probe daily CSV URLs on livebench.ai.
+
+    Walks back from today until a snapshot responds, returning at most one
+    date. Used only when the git tree and changelog sources are unavailable.
+    """
+    today = datetime.now(UTC).date()
+    for i in range(days_back):
+        date_str = (today - timedelta(days=i)).strftime("%Y_%m_%d")
+        if fetch_livebench_csv(date_str):
+            return [date_str]
+    return []
+
+
+def get_livebench_snapshot_dates() -> list[str]:
+    """Discover all LiveBench snapshot dates available on livebench.ai, newest first.
+
+    The git tree of LiveBench/livebench.github.io is the primary source: it is
+    exactly the set of CSVs the live site can serve (livebench.ai is GitHub
+    Pages deployed from that repo). The LiveBench/LiveBench changelog is only
+    used as a fallback when the tree API is unreachable, and direct URL probing
+    as a last resort.
+    """
+    dates = _discover_dates_from_tree()
+    if dates:
+        return dates
+    dates = _parse_changelog_dates()
+    if dates:
+        return dates
+    return _probe_recent_dates()
 
 
 def fetch_livebench() -> dict[str, Any]:
     """Fetch and parse LiveBench leaderboard data.
 
-    The latest snapshot date is read from the official LiveBench changelog
-    (https://github.com/LiveBench/LiveBench/blob/main/changelog.md), then the
-    corresponding `https://livebench.ai/table_YYYY_MM_DD.csv` is fetched.
+    Snapshot dates are discovered from the LiveBench/livebench.github.io git
+    tree (the source of the livebench.ai site), so the newest published data is
+    always used instead of the stale changelog. The newest snapshot is fetched
+    from `https://livebench.ai/table_YYYY_MM_DD.csv`, then any models missing
+    from it are filled in from older snapshots so all available data from
+    livebench.ai is retained (newest snapshot wins on conflicts).
     """
     print("-> Fetching LiveBench leaderboard...")
 
-    date_str = get_latest_livebench_date()
-    if date_str:
-        print(f"  v Latest LiveBench snapshot from changelog: {date_str}")
+    dates = get_livebench_snapshot_dates()
+    if not dates:
+        print("  w No LiveBench data available, using empty scores")
+        save_json(LIVEBENCH_PATH, {"models": {}})
+        return {"models": {}}
+    print(f"  v Discovered {len(dates)} LiveBench snapshot(s); newest: {dates[0]}")
+
+    # 1. Primary snapshot: newest date whose CSV parses (livebench.ai first,
+    #    github.io raw mirror as fallback).
+    primary = None
+    for date_str in dates:
         csv_text = fetch_livebench_csv(date_str)
-        if csv_text:
-            scores = parse_livebench_csv(csv_text)
-            if scores:
-                result = {
-                    "_snapshot_date": date_str,
-                    "_source": f"{LIVEBENCH_BASE}/table_{date_str}.csv",
-                    "models": scores,
-                }
-                save_json(LIVEBENCH_PATH, result)
-                print(f"  v LiveBench CSV ({date_str}): {len(scores)} models parsed")
-                return result
+        if not csv_text:
+            continue
+        scores = parse_livebench_csv(csv_text)
+        if scores:
+            primary = (date_str, scores)
+            break
 
-    # Fallback to JSON endpoints (older format, may not exist)
-    print("  w CSV fetch failed, trying JSON fallbacks...")
-    for url in LIVEBENCH_JSON_URLS:
-        data = fetch_json(url)
-        if data:
-            scores = {}
-            if isinstance(data, list):
-                for entry in data:
-                    if isinstance(entry, dict):
-                        name = (
-                            entry.get("model") or entry.get("name") or entry.get("id")
-                        )
-                        if name:
-                            scores[name] = {
-                                "overall": entry.get("overall") or entry.get("Overall"),
-                                "coding": entry.get("coding") or entry.get("Coding"),
-                                "reasoning": entry.get("reasoning")
-                                or entry.get("Reasoning"),
-                                "vision": entry.get("vision") or entry.get("Vision"),
-                                "instruction_following": entry.get(
-                                    "instruction_following"
-                                )
-                                or entry.get("Instruction Following"),
-                            }
-            elif isinstance(data, dict):
-                for name, entry in data.items():
-                    if isinstance(entry, dict):
-                        scores[name] = {
-                            "overall": entry.get("overall") or entry.get("Overall"),
-                            "coding": entry.get("coding") or entry.get("Coding"),
-                            "reasoning": entry.get("reasoning")
-                            or entry.get("Reasoning"),
-                            "vision": entry.get("vision") or entry.get("Vision"),
-                            "instruction_following": entry.get("instruction_following")
-                            or entry.get("Instruction Following"),
-                        }
+    if not primary:
+        print("  w No LiveBench CSV parseable, using empty scores")
+        save_json(LIVEBENCH_PATH, {"models": {}})
+        return {"models": {}}
 
-            # Clean up scores
-            cleaned = {}
-            for name, s in scores.items():
+    snapshot_date, scores = primary
+    # 2. Merge models missing from the newest snapshot from older snapshots.
+    merged = dict(scores)
+    merged_from: list[tuple[str, int]] = []
+    for date_str in dates:
+        if date_str == snapshot_date:
+            continue
+        older_text = fetch_livebench_csv(date_str)
+        if not older_text:
+            continue
+        older = parse_livebench_csv(older_text)
+        if not older:
+            continue
+        missing = {name for name in older if name not in merged}
+        for name in missing:
+            merged[name] = older[name]
+        if missing:
+            merged_from.append((date_str, len(missing)))
 
-                def clean(v: Any) -> float | None:
-                    try:
-                        return round(float(v), 1) if v is not None else None
-                    except (ValueError, TypeError):
-                        return None
-
-                ov = clean(s.get("overall"))
-                cd = clean(s.get("coding"))
-                re_s = clean(s.get("reasoning"))
-                vs = clean(s.get("vision"))
-                if_ = clean(s.get("instruction_following"))
-                if ov is not None:
-                    cleaned[name] = {
-                        "overall": ov,
-                        "coding": cd,
-                        "reasoning": re_s,
-                        "vision": vs,
-                        "instruction_following": if_,
-                    }
-
-            if cleaned:
-                save_json(LIVEBENCH_PATH, {"_source": url, "models": cleaned})
-                print(f"  v LiveBench JSON: {len(cleaned)} models parsed")
-                return {"_source": url, "models": cleaned}
-
-    print("  w No LiveBench data available, using empty scores")
-    save_json(LIVEBENCH_PATH, {"models": {}})
-    return {"models": {}}
+    result = {
+        "_snapshot_date": snapshot_date,
+        "_source": f"{LIVEBENCH_BASE}/table_{snapshot_date}.csv",
+        "models": merged,
+    }
+    save_json(LIVEBENCH_PATH, result)
+    print(f"  v LiveBench CSV ({snapshot_date}): {len(scores)} models parsed")
+    for date_str, count in merged_from:
+        print(f"  v  + merged {count} model(s) from {date_str}")
+    if merged_from:
+        print(f"  v Total models after merge: {len(merged)}")
+    return result
 
 
 # --- Workflow Scanning ---
