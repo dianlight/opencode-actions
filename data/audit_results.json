@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-01T09:28:05.392003+00:00",
+  "timestamp": "2026-08-01T09:48:40.911228+00:00",
   "livebench_snapshot": "2026_06_25",
   "livebench_source": "https://livebench.ai/table_2026_06_25.csv",
   "livebench_models": 324,
@@ -7,6 +7,49 @@
   "go_models": 24,
   "workflows_audited": 4,
   "steps_audited": 7,
+  "model_config_drift": {
+    "detected": true,
+    "timestamp": "2026-08-01T09:48:40.911233+00:00",
+    "livebench_snapshot": "2026_06_25",
+    "current_workflows": {
+      "opencode-issue-handler": {
+        "process-4": {
+          "go": "opencode-go/qwen3.7-max",
+          "free": "opencode/deepseek-v4-flash-free"
+        },
+        "process-5": {
+          "go": "opencode-go/glm-5.1",
+          "free": "opencode/nemotron-3-ultra-free"
+        }
+      },
+      "opencode-maintenance": {
+        "handle-checkbox-task": {
+          "go": "opencode-go/glm-5.1",
+          "free": "opencode/nemotron-3-ultra-free"
+        }
+      },
+      "opencode-pr-comment": {
+        "process-2": {
+          "go": "opencode-go/grok-4.5",
+          "free": "opencode/deepseek-v4-flash-free"
+        },
+        "process-3": {
+          "go": "opencode-go/grok-4.5",
+          "free": "opencode/deepseek-v4-flash-free"
+        },
+        "process-6": {
+          "go": "opencode-go/glm-5.1",
+          "free": "opencode/nemotron-3-ultra-free"
+        }
+      },
+      "opencode-pr-review": {
+        "review": {
+          "go": "opencode-go/grok-4.5",
+          "free": "opencode/deepseek-v4-flash-free"
+        }
+      }
+    }
+  },
   "results": [
     {
       "file": ".github/workflows/opencode-issue-handler.yml",
@@ -33,7 +76,7 @@
       "job": "process-5",
       "step": "Run opencode (Process 5 \u2014 Issue Work & PR Creation)",
       "task_type": "issue-implementation",
-      "current_model": "opencode-go/kimi-k3",
+      "current_model": "opencode-go/glm-5.1",
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
       "recommended_free": "nemotron-3-ultra-free",
@@ -52,7 +95,7 @@
       "job": "Handle Checked Tasks",
       "step": "Run OpenCode for checked tasks",
       "task_type": "code-implementation",
-      "current_model": "opencode-go/kimi-k3",
+      "current_model": "opencode-go/glm-5.1",
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
       "recommended_free": "nemotron-3-ultra-free",
@@ -71,7 +114,7 @@
       "job": "process-2",
       "step": "Run opencode (Process 2 \u2014 Bot thread reply)",
       "task_type": "pr-review",
-      "current_model": "opencode-go/kimi-k3",
+      "current_model": "opencode-go/grok-4.5",
       "current_model_free": "opencode/deepseek-v4-flash-free",
       "auto": true,
       "recommended_free": "deepseek-v4-flash-free",
@@ -90,7 +133,7 @@
       "job": "process-3",
       "step": "Run opencode (Process 3 \u2014 User-owned thread takeover)",
       "task_type": "pr-review",
-      "current_model": "opencode-go/kimi-k3",
+      "current_model": "opencode-go/grok-4.5",
       "current_model_free": "opencode/deepseek-v4-flash-free",
       "auto": true,
       "recommended_free": "deepseek-v4-flash-free",
@@ -109,7 +152,7 @@
       "job": "process-6",
       "step": "Run opencode (Process 6 \u2014 PR Task Execution)",
       "task_type": "code-implementation",
-      "current_model": "opencode-go/kimi-k3",
+      "current_model": "opencode-go/glm-5.1",
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
       "recommended_free": "nemotron-3-ultra-free",
@@ -128,7 +171,7 @@
       "job": "review",
       "step": "Run opencode (PR code review)",
       "task_type": "pr-review",
-      "current_model": "opencode-go/kimi-k3",
+      "current_model": "opencode-go/grok-4.5",
       "current_model_free": "opencode/deepseek-v4-flash-free",
       "auto": true,
       "recommended_free": "deepseek-v4-flash-free",

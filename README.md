@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-08-01 09:28 UTC**.
+> Last updated: **2026-08-01 09:48 UTC**.
 > LiveBench data: **324 models scored**.
 > LiveBench snapshot: **2026_06_25**.
 > Source: https://livebench.ai/table_2026_06_25.csv
@@ -66,18 +66,18 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-08-01 09:28 UTC**
+> Audited: **2026-08-01 09:48 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|-----------------|------------------|----------------|--------|
 | `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode-go/qwen3.7-max` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5.5-pro` (81.6 (+7%)) | `opencode/deepseek-v4-flash-free` (69.4) | 🏆 `opencode-go/qwen3.7-max` (76.6 (+10%)) | ✅ |
-| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode-go/kimi-k3` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+3%)) | `opencode/nemotron-3-ultra-free` (56.5) | 🏆 `opencode-go/kimi-k3` (69.9 (+24%)) ⚠️ x2.0 · alt: `opencode-go/glm-5.1` (63.1 (+24%)) | ✅ |
-| `OpenCode Maintenance` | `Handle Checked Tasks` | `Run OpenCode for checked tasks` | `code-implementation` | `opencode-go/kimi-k3` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+3%)) | `opencode/nemotron-3-ultra-free` (56.5) | 🏆 `opencode-go/kimi-k3` (69.9 (+24%)) ⚠️ x2.0 · alt: `opencode-go/glm-5.1` (63.1 (+24%)) | ✅ |
-| `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode-go/kimi-k3` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+10%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/kimi-k3` (87.0 (+19%)) ⚠️ x2.0 · alt: `opencode-go/grok-4.5` (86.9 (+19%)) | ✅ |
-| `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode-go/kimi-k3` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+10%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/kimi-k3` (87.0 (+19%)) ⚠️ x2.0 · alt: `opencode-go/grok-4.5` (86.9 (+19%)) | ✅ |
-| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `code-implementation` | `opencode-go/kimi-k3` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+3%)) | `opencode/nemotron-3-ultra-free` (56.5) | 🏆 `opencode-go/kimi-k3` (69.9 (+24%)) ⚠️ x2.0 · alt: `opencode-go/glm-5.1` (63.1 (+24%)) | ✅ |
-| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode-go/kimi-k3` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+10%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/kimi-k3` (87.0 (+19%)) ⚠️ x2.0 · alt: `opencode-go/grok-4.5` (86.9 (+19%)) | ✅ |
+| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode-go/glm-5.1` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+14%)) | `opencode/nemotron-3-ultra-free` (56.5) | 🏆 `opencode-go/kimi-k3` (69.9 (+24%)) ⚠️ x2.0 · alt: `opencode-go/glm-5.1` (63.1 (+24%)) | ✅ |
+| `OpenCode Maintenance` | `Handle Checked Tasks` | `Run OpenCode for checked tasks` | `code-implementation` | `opencode-go/glm-5.1` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+14%)) | `opencode/nemotron-3-ultra-free` (56.5) | 🏆 `opencode-go/kimi-k3` (69.9 (+24%)) ⚠️ x2.0 · alt: `opencode-go/glm-5.1` (63.1 (+24%)) | ✅ |
+| `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/kimi-k3` (87.0 (+19%)) ⚠️ x2.0 · alt: `opencode-go/grok-4.5` (86.9 (+19%)) | ✅ |
+| `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/kimi-k3` (87.0 (+19%)) ⚠️ x2.0 · alt: `opencode-go/grok-4.5` (86.9 (+19%)) | ✅ |
+| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `code-implementation` | `opencode-go/glm-5.1` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+14%)) | `opencode/nemotron-3-ultra-free` (56.5) | 🏆 `opencode-go/kimi-k3` (69.9 (+24%)) ⚠️ x2.0 · alt: `opencode-go/glm-5.1` (63.1 (+24%)) | ✅ |
+| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/kimi-k3` (87.0 (+19%)) ⚠️ x2.0 · alt: `opencode-go/grok-4.5` (86.9 (+19%)) | ✅ |
 
 _Legend: ✅ Optimal · ⚠️ Warn (free, not best) · ❗ Alert (paid when free is preferred) · ❌ Error (wrong model) · 💀 Fatal (model not set). 🏆 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). ⚠️ xN marks models with elevated token consumption. ⚙️ marks steps resolved at runtime from the central config (`data/model-config.json`). Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._
