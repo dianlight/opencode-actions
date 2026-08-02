@@ -68,7 +68,7 @@ To change a model: never edit workflow files. Run `mise run maintenance`, review
 
 ### Maintenance
 
-`scripts/opencode_maintenance.py` fetches model catalogs (OpenCode Zen/Go + LiveBench), classifies workflows by task type, scores models, updates `README.md` tables, saves results to `data/*.json`, and proposes model config updates (`data/model-config.proposed.json`) — it never applies them: the config changes only via issue + PR review. Runs on a schedule and on pushes to `opencode-maintenance.yaml`.
+`scripts/opencode_maintenance.py` fetches model catalogs (OpenCode Zen/Go + LiveBench), classifies workflows by task type, scores models, updates `README.md` tables, saves results to `data/*.json`, and proposes model config updates (`data/model-config.proposed.json`) — it never applies them: the config changes only via issue + PR review. Each run also fetches Zen model prices from the Zen docs pricing page (`https://opencode.ai/docs/it/zen#pricing`) and stores them per model in `data/zen_models.json` (`pricing` field + `pricing_source`). The usable free list (`free`) is the union of `-free`-suffixed models and any model the pricing page publishes as "Free" — some free models (e.g. `big-pickle`) do not carry the `-free` suffix. Runs on a schedule and on pushes to `opencode-maintenance.yaml`.
 
 ## Config files
 
@@ -87,6 +87,15 @@ To change a model: never edit workflow files. Run `mise run maintenance`, review
 - Every process step uses `continue-on-error: true` followed by reaction-on-success/failure steps
 - Issue titles are passed via `env:` (not inline substitution) to prevent shell injection
 - Multi-line strings in `run: |` blocks must be consistently indented — all content lines must share the same indentation as the first content line; use temp-file patterns (`echo ... > /tmp/file`) instead of inline `--body "..."` for long comment bodies
+
+## Changelog
+
+When updating `CHANGELOG.md`:
+
+- Always fetch remote tags first (`git fetch --tags --force` or `git ls-remote --tags origin`) to detect release tags.
+- Changes made after the latest release tag go under `## [Unreleased]`.
+- Changes that belong to an already-released version go in the appropriate release paragraph (e.g. `## [0.1.0]`), never in `[Unreleased]`.
+- If no release tags exist, all entries go under `## [Unreleased]`.
 
 ## Validation
 

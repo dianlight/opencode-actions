@@ -115,7 +115,10 @@ on an issue. `/oc` runs the Go (paid) model, `/ocf` runs the free model.
 1. Extracts the `<information>` string + issue body
 2. Sanitizes the title to generate a unique feature branch
 3. Implements the feature, commits, pushes
-4. Appends a CHANGELOG.md entry
+4. Fetches remote tags (`git fetch --tags --force`) to detect release
+   boundaries, then appends a CHANGELOG.md entry: new changes under
+   `[Unreleased]`, changes belonging to an already-released version in
+   that release's paragraph
 5. Creates a Pull Request with task checklist (`- [ ] task`)
 
 **Workflow:** `.github/workflows/opencode-issue-handler.yml`

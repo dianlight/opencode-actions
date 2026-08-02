@@ -1,4 +1,9 @@
 {
   "stale_fallback": [],
-  "missing_scores": []
+  "missing_scores": [
+    {
+      "model": "big-pickle",
+      "tier": "Free"
+    }
+  ]
 }

@@ -241,7 +241,10 @@ jobs:
             2. Get default branch: `gh repo view --json defaultBranch -q .defaultBranch`
             3. Create branch: `opencode/issue-${ISSUE_NUMBER}-${slug}`
             4. Implement, write/update tests, verify.
-            5. Update CHANGELOG.md with `[Unreleased]` entry.
+            5. Update CHANGELOG.md. First run `git fetch --tags --force` to
+            detect release tags: new changes go under `[Unreleased]`, while
+            changes belonging to an already-released version go in that
+            release's paragraph instead of `[Unreleased]`.
             6. `git add -A && git commit -m "feat(scope): implement #N" && git push`
             7. `gh pr create` with checklist body. Link back via `gh issue comment`.
 

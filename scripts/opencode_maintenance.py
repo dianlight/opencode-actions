@@ -16,9 +16,10 @@ import io
 import json
 import re
 import sys
+from html.parser import HTMLParser
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -52,6 +53,11 @@ MODEL_CONFIG_PROPOSED_PATH = DATA_DIR / "model-config.proposed.json"
 # --- Constants ---
 ZEN_URL = "https://opencode.ai/zen/v1/models"
 GO_URL = "https://opencode.ai/zen/go/v1/models"
+# Zen docs pricing page: the #pricing anchor is client-side, so the page itself
+# is fetched and its pricing table parsed for per-model prices. The docs also
+# list models published as "Free" that do NOT carry the `-free` suffix
+# (e.g. `big-pickle`); those must be treated as usable free models.
+ZEN_PRICING_URL = "https://opencode.ai/docs/it/zen#pricing"
 LIVEBENCH_BASE = "https://livebench.ai"
 # LiveBench/LiveBench changelog is a secondary date hint (lags the live site)
 LIVEBENCH_CHANGELOG_URL = (
@@ -347,21 +353,196 @@ def load_json(path: Path) -> Any:
         return json.load(f)
 
 
+# --- Zen Pricing ---
+
+
+class _HtmlTableParser(HTMLParser):
+    """Extract all <table> elements from an HTML page as rows of cell strings."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tables: list[list[list[str]]] = []
+        self._table: list[list[str]] | None = None
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    @override
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "table":
+            self._table = []
+        elif tag == "tr" and self._table is not None:
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+
+    @override
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("td", "th") and self._cell is not None:
+            if self._row is not None:
+                self._row.append(" ".join("".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            if self._table is not None:
+                self._table.append(self._row)
+            self._row = None
+        elif tag == "table" and self._table is not None:
+            self.tables.append(self._table)
+            self._table = None
+
+    @override
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def _parse_price_cell(cell: str) -> str | None:
+    """Normalise a pricing cell: '-'/empty cells become None, everything else
+    keeps the published string value (e.g. "Free" or "$0.30")."""
+    value = cell.strip()
+    if not value or value == "-":
+        return None
+    return value
+
+
+def _pricing_display_to_id(display: str, name_to_id: dict[str, str]) -> str | None:
+    """Map a pricing-table display name to a Zen model ID.
+
+    Per-context ranges in parentheses (e.g. "GPT 5.6 Sol (≤ 272K tokens)") are
+    stripped first, then the name is looked up in the endpoint table (which has
+    an explicit Model ID column). As a fallback the name is slugified
+    (lowercase, spaces -> hyphens, dots kept).
+    """
+    name = re.sub(r"\s*\([^)]*\)", "", display).strip()
+    if name in name_to_id:
+        return name_to_id[name]
+    slug = re.sub(r"[^a-z0-9.]+", "-", name.lower()).strip("-")
+    return slug or None
+
+
+def fetch_zen_pricing() -> dict[str, dict[str, Any]] | None:
+    """Fetch Zen model prices from the docs pricing page.
+
+    Returns {model_id: {"input": ..., "output": ..., "cached_read": ...,
+    "cached_write": ..., "free": bool, "tiers": [...]}}.
+    Price cells keep the published string value ("Free" or "$0.30"); "-"/empty
+    cells become None. Models with per-context-range prices (e.g. GPT 5.6 Sol)
+    get the default (first) tier at the top level plus every tier under
+    "tiers". Returns None if the page could not be fetched.
+    """
+    page_url = ZEN_PRICING_URL.split("#", 1)[0]
+    html = fetch_text(page_url)
+    if not html:
+        print(f"  x Failed to fetch Zen pricing page {page_url}")
+        return None
+
+    parser = _HtmlTableParser()
+    parser.feed(html)
+    tables = parser.tables
+
+    # Build display-name -> model-id map from the endpoint table (has a
+    # "Model ID" column with the explicit id for every model display name).
+    name_to_id: dict[str, str] = {}
+    for table in tables:
+        if not table:
+            continue
+        header = [c.lower() for c in table[0]]
+        if "model id" in header:
+            idx = header.index("model id")
+            for row in table[1:]:
+                if len(row) > idx and row[0]:
+                    name_to_id[row[0]] = row[idx]
+            break
+
+    # Locate the pricing table via its price-ish header columns.
+    pricing_table = None
+    for table in tables:
+        if not table:
+            continue
+        header = [c.lower() for c in table[0]]
+        if any(h in header for h in ("input", "output")) or any(
+            "cached" in h for h in header
+        ):
+            pricing_table = table
+            break
+    if not pricing_table:
+        print("  x Zen pricing: pricing table not found on the docs page")
+        return {}
+
+    pricing: dict[str, dict[str, Any]] = {}
+    for row in pricing_table[1:]:
+        if len(row) < 3 or not row[0].strip():
+            continue
+        model_id = _pricing_display_to_id(row[0], name_to_id)
+        if not model_id:
+            continue
+        entry: dict[str, Any] = {
+            "input": _parse_price_cell(row[1]),
+            "output": _parse_price_cell(row[2]),
+            "cached_read": _parse_price_cell(row[3]) if len(row) > 3 else None,
+            "cached_write": _parse_price_cell(row[4]) if len(row) > 4 else None,
+        }
+        if model_id not in pricing:
+            entry["free"] = entry["input"] == "Free" or entry["output"] == "Free"
+            pricing[model_id] = entry
+        range_m = re.search(r"\(([^)]*)\)", row[0])
+        if range_m:
+            tier = {"range": range_m.group(1).strip(), **entry}
+            pricing[model_id].setdefault("tiers", []).append(tier)
+
+    return pricing
+
+
 # --- Model Fetching ---
 def fetch_opencode_models() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Fetch Zen (free) and Go (paid) model catalogs."""
+    """Fetch Zen (free) and Go (paid) model catalogs.
+
+    Prices are fetched from the Zen docs pricing page and attached to each
+    Zen model. The usable free list is the union of `-free`-suffixed models
+    and any model the pricing page publishes as "Free" (e.g. `big-pickle`,
+    which has no `-free` suffix).
+    """
     print("-> Fetching OpenCode model catalogs...")
 
-    # Fetch Zen models (all), filter free
+    # Fetch Zen models (all)
     zen_data = fetch_json(ZEN_URL)
     if not zen_data:
         print("  x Failed to fetch Zen models")
         return [], []
 
     all_zen = zen_data.get("data", [])
-    free_models = [m for m in all_zen if m.get("id", "").endswith("-free")]
-    save_json(ZEN_MODELS_PATH, {"all": all_zen, "free": free_models})
-    print(f"  v Zen: {len(all_zen)} total, {len(free_models)} free")
+
+    # Fetch prices from the Zen docs pricing page and attach them to models.
+    pricing = fetch_zen_pricing()
+    if pricing is None:
+        # Reuse prices from the last successful run so zen_models.json stays
+        # populated even while the docs page is unreachable.
+        prev = load_json(ZEN_MODELS_PATH) if ZEN_MODELS_PATH.exists() else {}
+        pricing = {
+            m["id"]: m["pricing"]
+            for m in prev.get("all", [])
+            if m.get("pricing")
+        }
+        print("  w Zen pricing: reusing previously fetched prices")
+    free_by_pricing: set[str] = set()
+    for m in all_zen:
+        info = pricing.get(m["id"])
+        if info:
+            m["pricing"] = info
+            if info.get("free"):
+                free_by_pricing.add(m["id"])
+
+    free_models = [
+        m for m in all_zen
+        if m.get("id", "").endswith("-free") or m["id"] in free_by_pricing
+    ]
+    save_json(
+        ZEN_MODELS_PATH,
+        {"all": all_zen, "free": free_models, "pricing_source": ZEN_PRICING_URL},
+    )
+    print(
+        f"  v Zen: {len(all_zen)} total, {len(free_models)} free "
+        + f"({len(free_by_pricing)} via pricing page)"
+    )
 
     # Fetch Go models (paid)
     go_data = fetch_json(GO_URL)
@@ -1069,18 +1250,21 @@ def _strip_model_prefix(model: str) -> str:
 def classify_model_status(
     current: str, recommended_free: str, recommended_go: str,
     alt_models: list[str] | None = None,
+    free_ids: set[str] | None = None,
 ) -> str:
     """Classify model status with a 5-tier system.
 
     Rules:
       \u2705 OK       - current matches best model (after free-first) OR an alt (best without multiplier)
-      \u26a0\ufe0f Warn  - current is a free model (ends with -free) but not the best
+      \u26a0\ufe0f Warn  - current is a free model but not the best
       \u2757 Alert   - free-first chose free but current is a paid model
       \u274c Error   - current exists but doesn't fit any other rule
       \U0001f480 Fatal   - current is falsy or "NOT_SET"
 
     Accepts an optional list of alt model names (e.g. best without multiplier)
-    that are also considered valid choices.
+    that are also considered valid choices, and an optional set of free model
+    IDs (models with a `-free` suffix OR published as "Free" on the Zen docs
+    pricing page, e.g. `big-pickle`).
     """
     if not current or current == "NOT_SET":
         return "\U0001f480"  # Fatal
@@ -1095,6 +1279,9 @@ def classify_model_status(
     rec_go = (
         _strip_model_prefix(recommended_go).lower().strip() if recommended_go else ""
     )
+
+    # Free tier: `-free` suffix OR listed as "Free" on the pricing page.
+    free_ids_norm = {_strip_model_prefix(f).lower().strip() for f in (free_ids or ())}
 
     # Free-first rule: if rec_free == rec_go, free won
     free_won = bool(rec_free and rec_go and rec_free == rec_go)
@@ -1114,7 +1301,8 @@ def classify_model_status(
         return "\u2705"  # OK - matches best or alt
 
     # Not the best model
-    if not curr.endswith("-free"):
+    is_free_model = curr.endswith("-free") or curr in free_ids_norm
+    if not is_free_model:
         # Paid model
         if free_won:
             return "\u2757"  # Alert - paying when free is preferred
@@ -1164,11 +1352,12 @@ def detect_coverage_issues(free_models: list[dict[str, Any]], go_models: list[di
             )
 
     # Check all OpenCode models for missing scores
+    free_ids = {m["id"] for m in free_models}
     all_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
     for model_id in sorted(all_ids):
         source = get_model_source(model_id, livebench)
         if source == "missing":
-            tier = "Free" if model_id.endswith("-free") else "Go (Paid)"
+            tier = "Free" if model_id in free_ids else "Go (Paid)"
             issues["missing_scores"].append({"model": model_id, "tier": tier})
 
     return issues
@@ -1342,6 +1531,7 @@ def generate_score_reference_table(
     """
     _ = zen_models  # kept for API compatibility
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
+    free_ids = {m["id"] for m in free_models}
 
     # Build a reverse map: model -> list of task types it's best suited for.
     # For each model, find the top 2 task types whose priority subscore the
@@ -1382,14 +1572,14 @@ def generate_score_reference_table(
     ]
 
     for model_id in sorted(all_model_ids):
-        tier = "Free" if model_id.endswith("-free") else "Go (Paid)"
+        tier = "Free" if model_id in free_ids else "Go (Paid)"
         source = get_model_source(model_id, livebench)
         if source == "livebench":
-            src_icon = "v LiveBench"
+            src_icon = "\u2705 LiveBench"
         elif source == "fallback":
-            src_icon = "f Fallback"
+            src_icon = "\U0001f4cb Fallback"
         else:
-            src_icon = "x Missing"
+            src_icon = "\u274c Missing"
 
         # Token multiplier
         mult = get_token_multiplier(model_id)
@@ -1441,6 +1631,7 @@ def generate_workflow_audit_table(
 
     all_zen = zen_models or []
     go_ids = {m["id"] for m in go_models}
+    free_ids = {m["id"] for m in free_models}
 
     lines = [
         "",
@@ -1598,7 +1789,10 @@ def generate_workflow_audit_table(
             status_alts.append(go_alt_raw[0])
         if best_free and best_go and best_free == best_go and free_alt_raw:
             status_alts.append(free_alt_raw[0])
-        status = classify_model_status(current, best_free, best_go, alt_models=status_alts or None)
+        status = classify_model_status(
+            current, best_free, best_go, alt_models=status_alts or None,
+            free_ids=free_ids,
+        )
 
         # Add trophy icon to the recommended model that is preferred
         if best_free and best_go and best_free == best_go:
@@ -1734,6 +1928,7 @@ def main() -> None:
     zen_data_obj = load_json(ZEN_MODELS_PATH) if ZEN_MODELS_PATH.exists() else {}
     all_zen_models = zen_data_obj.get("all", [])
     go_ids = {m["id"] for m in go_models}
+    free_ids = {m["id"] for m in free_models}
 
     model_table = generate_model_recommendation_table(
         task_types, free_models, go_models, livebench, threshold_pct,
@@ -1843,7 +2038,10 @@ def main() -> None:
         if current == "__auto__":
             status = "\u2705"
         else:
-            status = classify_model_status(current, best_free, best_go, alt_models=status_alts or None)
+            status = classify_model_status(
+                current, best_free, best_go, alt_models=status_alts or None,
+                free_ids=free_ids,
+            )
 
         # Determine preferred tier and compute % diff
         if best_free and best_go and best_free == best_go:
