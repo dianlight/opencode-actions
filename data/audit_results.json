@@ -48,7 +48,8 @@
           "free": "opencode/deepseek-v4-flash-free"
         }
       }
-    }
+    },
+    "alt_workflows": {}
   },
   "results": [
     {
