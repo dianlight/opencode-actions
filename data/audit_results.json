@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-03T22:06:09.009286+00:00",
+  "timestamp": "2026-08-03T22:17:33.764785+00:00",
   "livebench_snapshot": "2026_06_25",
   "livebench_source": "https://livebench.ai/table_2026_06_25.csv",
   "livebench_models": 325,
@@ -9,7 +9,7 @@
   "steps_audited": 7,
   "model_config_drift": {
     "detected": true,
-    "timestamp": "2026-08-03T22:06:09.009300+00:00",
+    "timestamp": "2026-08-03T22:17:33.764794+00:00",
     "livebench_snapshot": "2026_06_25",
     "current_workflows": {
       "opencode-issue-handler": {
@@ -48,7 +48,8 @@
           "free": "opencode/deepseek-v4-flash-free"
         }
       }
-    }
+    },
+    "alt_workflows": {}
   },
   "results": [
     {
