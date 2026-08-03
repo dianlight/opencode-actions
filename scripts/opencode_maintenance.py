@@ -49,6 +49,9 @@ COVERAGE_ISSUES_PATH = DATA_DIR / "coverage_issues.json"
 MODEL_CONFIG_PATH = DATA_DIR / "model-config.json"
 # Proposed config written when the run recommends a change (gitignored).
 MODEL_CONFIG_PROPOSED_PATH = DATA_DIR / "model-config.proposed.json"
+# Optional alt proposal (gitignored): same config with token-multiplier models
+# replaced by their cheaper alt, published when it is actionable.
+MODEL_CONFIG_PROPOSED_ALT_PATH = DATA_DIR / "model-config.proposed-alt.json"
 
 # --- Constants ---
 ZEN_URL = "https://opencode.ai/zen/v1/models"
@@ -885,6 +888,7 @@ def generate_model_config(
     workflow can open a review issue, and the committed file is left untouched.
     """
     workflows: dict[str, Any] = {}
+    alt_workflows: dict[str, Any] = {}
     for r, entry in zip(scan_results, audit_results):
         if "error" in r or "job_id" not in r:
             continue
@@ -903,6 +907,14 @@ def generate_model_config(
             "go": go_model,
             "free": free_model,
         }
+        # Alt proposal entry: swap in the best model without a token multiplier
+        # (the audit's *alt) so the same change can be applied more cheaply.
+        alt_go = entry.get("recommended_go_alt")
+        alt_free = entry.get("recommended_free_alt")
+        alt_workflows.setdefault(stem, {})[r["job_id"]] = {
+            "go": _add_model_prefix(alt_go, go_ids) if alt_go else go_model,
+            "free": _add_model_prefix(alt_free, go_ids) if alt_free else free_model,
+        }
 
     proposed = {
         "timestamp": datetime.now(UTC).isoformat(),
@@ -912,22 +924,54 @@ def generate_model_config(
         "workflows": workflows,
     }
 
+    current_workflows: dict[str, Any] = {}
     if not MODEL_CONFIG_PATH.exists():
         # No committed config yet: the resolver fails closed without one, so
         # the proposal must land via PR too — never write it in place.
         save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
         print(f"  ! No committed config found — proposal saved to {MODEL_CONFIG_PROPOSED_PATH} (add via issue + PR review)")
+        _write_alt_proposal(alt_workflows, workflows, current_workflows, proposed)
         return True
 
     current = _load_model_config()
-    if (current.get("workflows") or {}) == proposed["workflows"]:
+    current_workflows = current.get("workflows") or {}
+    if current_workflows == proposed["workflows"]:
         print("  v Central model config unchanged")
+        MODEL_CONFIG_PROPOSED_ALT_PATH.unlink(missing_ok=True)
         return False
 
     save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
     print(f"  ! Model config drift detected — NOT applied; proposal saved to {MODEL_CONFIG_PROPOSED_PATH}")
     print("  ! Committed data/model-config.json changes only via issue + PR review")
+    _write_alt_proposal(alt_workflows, workflows, current_workflows, proposed)
     return True
+
+
+def _write_alt_proposal(
+    alt_workflows: dict[str, Any],
+    default_workflows: dict[str, Any],
+    current_workflows: dict[str, Any],
+    proposed: dict[str, Any],
+) -> None:
+    """Publish the optional alt model config proposal, or remove a stale one.
+
+    The alt proposal replaces token-multiplier models with their cheaper alt.
+    It is only saved when actionable — it differs from the default proposal AND
+    from the committed config — so checking the alt box never opens an empty PR.
+    """
+    actionable = (
+        alt_workflows != default_workflows and alt_workflows != current_workflows
+    )
+    if actionable:
+        alt_proposed = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "livebench_snapshot": proposed.get("livebench_snapshot"),
+            "workflows": alt_workflows,
+        }
+        save_json(MODEL_CONFIG_PROPOSED_ALT_PATH, alt_proposed)
+        print(f"  ! Alt model proposal saved to {MODEL_CONFIG_PROPOSED_ALT_PATH} (apply via issue + PR review)")
+    else:
+        MODEL_CONFIG_PROPOSED_ALT_PATH.unlink(missing_ok=True)
 
 
 def classify_task_type(
