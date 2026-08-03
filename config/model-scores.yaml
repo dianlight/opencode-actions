@@ -47,6 +47,12 @@ model_scores:
     overall: 66.0
     reasoning: 72.0
     vision: 62.0
+  qwen3.8-max:
+    coding: 77.0              # BenchLM weighted coding category (#6/130, 96th pct)
+    instruction_following: 93.9  # BenchLM IFBench weighted (#2/33, 97th pct)
+    overall: 78.2             # BenchLM overall score (#6/215)
+    reasoning: 95.5           # BenchLM reasoning category (#1/2, 100th pct)
+    vision: 88.1              # BenchLM multimodal category (#2/34, 97th pct)
   laguna-s-2.1-free:
     coding: 52.0
     instruction_following: 54.0
