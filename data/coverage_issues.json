@@ -2,10 +2,6 @@
   "stale_fallback": [],
   "missing_scores": [
     {
-      "model": "big-pickle",
-      "tier": "Free"
-    },
-    {
       "model": "qwen3.8-max",
       "tier": "Go (Paid)"
     }

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-03T21:39:54.720063+00:00",
+  "timestamp": "2026-08-03T21:41:19.902199+00:00",
   "livebench_snapshot": "2026_06_25",
   "livebench_source": "https://livebench.ai/table_2026_06_25.csv",
   "livebench_models": 325,
@@ -9,7 +9,7 @@
   "steps_audited": 7,
   "model_config_drift": {
     "detected": true,
-    "timestamp": "2026-08-03T21:39:54.720070+00:00",
+    "timestamp": "2026-08-03T21:41:19.902207+00:00",
     "livebench_snapshot": "2026_06_25",
     "current_workflows": {
       "opencode-issue-handler": {
@@ -79,15 +79,15 @@
       "current_model": "opencode-go/glm-5.1",
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
-      "recommended_free": "nemotron-3-ultra-free",
-      "recommended_go": "kimi-k3",
+      "recommended_free": "big-pickle",
+      "recommended_go": "big-pickle",
       "recommended_free_alt": null,
-      "recommended_go_alt": "glm-5.1",
+      "recommended_go_alt": null,
       "recommended_free_multiplier": 1.0,
-      "recommended_go_multiplier": 2.0,
-      "preferred_tier": "go",
-      "preferred_diff": 24,
-      "status": "\u2705"
+      "recommended_go_multiplier": 1.0,
+      "preferred_tier": "free",
+      "preferred_diff": null,
+      "status": "\u2757"
     },
     {
       "file": ".github/workflows/opencode-maintenance.yaml",
@@ -98,15 +98,15 @@
       "current_model": "opencode-go/glm-5.1",
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
-      "recommended_free": "nemotron-3-ultra-free",
-      "recommended_go": "kimi-k3",
+      "recommended_free": "big-pickle",
+      "recommended_go": "big-pickle",
       "recommended_free_alt": null,
-      "recommended_go_alt": "glm-5.1",
+      "recommended_go_alt": null,
       "recommended_free_multiplier": 1.0,
-      "recommended_go_multiplier": 2.0,
-      "preferred_tier": "go",
-      "preferred_diff": 24,
-      "status": "\u2705"
+      "recommended_go_multiplier": 1.0,
+      "preferred_tier": "free",
+      "preferred_diff": null,
+      "status": "\u2757"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -155,15 +155,15 @@
       "current_model": "opencode-go/glm-5.1",
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
-      "recommended_free": "nemotron-3-ultra-free",
-      "recommended_go": "kimi-k3",
+      "recommended_free": "big-pickle",
+      "recommended_go": "big-pickle",
       "recommended_free_alt": null,
-      "recommended_go_alt": "glm-5.1",
+      "recommended_go_alt": null,
       "recommended_free_multiplier": 1.0,
-      "recommended_go_multiplier": 2.0,
-      "preferred_tier": "go",
-      "preferred_diff": 24,
-      "status": "\u2705"
+      "recommended_go_multiplier": 1.0,
+      "preferred_tier": "free",
+      "preferred_diff": null,
+      "status": "\u2757"
     },
     {
       "file": ".github/workflows/opencode-pr-review.yml",
