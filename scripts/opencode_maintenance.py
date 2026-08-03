@@ -145,73 +145,19 @@ def _get_fallback_scores() -> dict[str, dict[str, float]]:
     return _FALLBACK_CACHE
 
 
-# Token consumption multipliers cache
-_TOKEN_MULTIPLIER_CACHE: dict[str, Any] | None = None
-
-
-def get_token_multiplier(model_name: str) -> float:
-    """Get token consumption multiplier for a model (default 1.0 = normal).
-
-    Some models (e.g. kimi-k3) consume tokens at a higher rate (x2) due to
-    internal architecture. This is set manually in config/model-scores.yaml
-    under the `token_multipliers` key.
-    """
-    global _TOKEN_MULTIPLIER_CACHE
-    if _TOKEN_MULTIPLIER_CACHE is None:
-        config = load_yaml(MODEL_SCORES_PATH)
-        _TOKEN_MULTIPLIER_CACHE = config.get("token_multipliers", {}) or {}
-    name = _normalise_model_for_lookup(model_name)
-    assert _TOKEN_MULTIPLIER_CACHE is not None
-    return _TOKEN_MULTIPLIER_CACHE.get(name, 1.0)
-
-
-def has_token_multiplier(model_name: str) -> bool:
-    """Check if a model has a token consumption multiplier > 1."""
-    return get_token_multiplier(model_name) > 1.0
-
-
 def format_model_with_score(
     model_id: str | None,
     score: float | None,
     *,
-    show_multiplier: bool = True,
-    alt_model_id: str | None = None,
-    alt_score: float | str | None = None,
     score_suffix: str = "",
 ) -> str:
-    """Format a model cell as "Model (score)" with optional multiplier warning and alt.
+    """Format a model cell as "Model (score)".
 
     If score_suffix is provided (e.g. "+15%"), it's appended after the score.
-    If the model has a token multiplier > 1, an "xN" badge is shown.
-    If alt_model_id is given, the cell also shows "alt: alt_model (alt_score)".
     """
     if not model_id:
         return "\u2014"
-    cell = f"`{model_id}` ({score}{score_suffix})" if score is not None else f"`{model_id}`"
-    if show_multiplier and has_token_multiplier(model_id):
-        mult = get_token_multiplier(model_id)
-        cell += f" \u26a0\ufe0f x{mult}"
-        if alt_model_id:
-            # alt_score already includes any suffix (caller bakes it in)
-            alt_str = f"`{alt_model_id}` ({alt_score})" if alt_score is not None else f"`{alt_model_id}`"
-            cell += f" \u00b7 alt: {alt_str}"
-    return cell
-
-
-def _find_best_without_multiplier(
-    scored_list: list[tuple[Any, ...]],
-) -> tuple[Any, Any] | None:
-    """From a scored list (sorted best-first), find the first entry without token multiplier.
-
-    scored_list items: (model_id, ...) — any extra fields are ignored.
-    Returns (model_id, score) or None.
-    """
-    for entry in scored_list:
-        model_id = entry[0]
-        score = entry[-1]
-        if not has_token_multiplier(model_id):
-            return (model_id, score)
-    return None
+    return f"`{model_id}` ({score}{score_suffix})" if score is not None else f"`{model_id}`"
 
 
 def _add_model_prefix(
@@ -244,17 +190,6 @@ def _add_model_prefix(
     if go_ids and model_id in go_ids:
         return f"opencode-go/{model_id}"
     return f"opencode/{model_id}"
-
-
-def _prefix_alt_tuple(
-    alt: tuple[Any, Any] | None,
-    engine: str | None = None,
-    go_ids: set[str] | None = None,
-) -> tuple[str, Any] | None:
-    """Prefix the model ID in an alt tuple (model_id, score)."""
-    if alt is None:
-        return None
-    return (_add_model_prefix(alt[0], go_ids, engine=engine), alt[1])
 
 
 # --- Utils ---
@@ -873,7 +808,7 @@ def generate_model_config(
     audit_results: list[dict[str, Any]],
     go_ids: set[str],
     livebench: dict[str, Any],
-) -> tuple[bool, dict[str, Any] | None]:
+) -> bool:
     """Compute the proposed central model config — without applying it.
 
     The committed data/model-config.json is the actual configuration and is
@@ -882,19 +817,11 @@ def generate_model_config(
     `opencode-go/kimi-k3`), falling back to the model currently pinned in the
     workflow.
 
-    Returns (drift, alt_workflows): drift is True when the proposal differs
-    from the committed config (the proposal is saved to
-    data/model-config.proposed.json so the workflow can open a review issue,
-    and the committed file is left untouched). alt_workflows is the optional
-    proposal with token-multiplier models replaced by their cheaper alt (best
-    model without a multiplier), or None when it is not actionable — identical
-    to the default proposal or to the committed config — so the issue only
-    offers the alt checkbox when checking it would actually change
-    data/model-config.json. No separate alt config file is involved: applying
-    the alt writes data/model-config.json directly via the PR.
+    Returns True when the proposal differs from the committed config (the
+    proposal is saved to data/model-config.proposed.json so the workflow can
+    open a review issue, and the committed file is left untouched).
     """
     workflows: dict[str, Any] = {}
-    alt_workflows: dict[str, Any] = {}
     for r, entry in zip(scan_results, audit_results):
         if "error" in r or "job_id" not in r:
             continue
@@ -913,14 +840,6 @@ def generate_model_config(
             "go": go_model,
             "free": free_model,
         }
-        # Alt entry: swap in the best model without a token multiplier (the
-        # audit's *alt) so the same change can be applied more cheaply.
-        alt_go = entry.get("recommended_go_alt")
-        alt_free = entry.get("recommended_free_alt")
-        alt_workflows.setdefault(stem, {})[r["job_id"]] = {
-            "go": _add_model_prefix(alt_go, go_ids) if alt_go else go_model,
-            "free": _add_model_prefix(alt_free, go_ids) if alt_free else free_model,
-        }
 
     proposed = {
         "timestamp": datetime.now(UTC).isoformat(),
@@ -930,32 +849,23 @@ def generate_model_config(
         "workflows": workflows,
     }
 
-    def actionable_alt(current_wf: dict[str, Any]) -> dict[str, Any] | None:
-        """Return the alt proposal only when checking it changes something."""
-        if alt_workflows != workflows and alt_workflows != current_wf:
-            return alt_workflows
-        return None
-
     if not MODEL_CONFIG_PATH.exists():
         # No committed config yet: the resolver fails closed without one, so
         # the proposal must land via PR too — never write it in place.
         save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
         print(f"  ! No committed config found — proposal saved to {MODEL_CONFIG_PROPOSED_PATH} (add via issue + PR review)")
-        return True, actionable_alt({})
+        return True
 
     current = _load_model_config()
     current_workflows = current.get("workflows") or {}
     if current_workflows == proposed["workflows"]:
         print("  v Central model config unchanged")
-        return False, None
+        return False
 
     save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
     print(f"  ! Model config drift detected — NOT applied; proposal saved to {MODEL_CONFIG_PROPOSED_PATH}")
     print("  ! Committed data/model-config.json changes only via issue + PR review")
-    alt = actionable_alt(current_workflows)
-    if alt:
-        print("  ! Alt model proposal available — apply via the issue's alt checkbox")
-    return True, alt
+    return True
 
 
 def classify_task_type(
@@ -1277,22 +1187,19 @@ def _strip_model_prefix(model: str) -> str:
 
 def classify_model_status(
     current: str, recommended_free: str, recommended_go: str,
-    alt_models: list[str] | None = None,
     free_ids: set[str] | None = None,
 ) -> str:
     """Classify model status with a 5-tier system.
 
     Rules:
-      \u2705 OK       - current matches best model (after free-first) OR an alt (best without multiplier)
+      \u2705 OK       - current matches best model (after free-first)
       \u26a0\ufe0f Warn  - current is a free model but not the best
       \u2757 Alert   - free-first chose free but current is a paid model
       \u274c Error   - current exists but doesn't fit any other rule
       \U0001f480 Fatal   - current is falsy or "NOT_SET"
 
-    Accepts an optional list of alt model names (e.g. best without multiplier)
-    that are also considered valid choices, and an optional set of free model
-    IDs (models with a `-free` suffix OR published as "Free" on the Zen docs
-    pricing page, e.g. `big-pickle`).
+    Accepts an optional set of free model IDs (models with a `-free` suffix OR
+    published as "Free" on the Zen docs pricing page, e.g. `big-pickle`).
     """
     if not current or current == "NOT_SET":
         return "\U0001f480"  # Fatal
@@ -1315,18 +1222,8 @@ def classify_model_status(
     free_won = bool(rec_free and rec_go and rec_free == rec_go)
     best = rec_free if free_won else rec_go
 
-    # Build accepted set: best model + any alts (e.g. best without multiplier)
-    accepted = set()
-    if best:
-        accepted.add(best)
-    if alt_models:
-        for am in alt_models:
-            normalized = _strip_model_prefix(am).lower().strip()
-            if normalized:
-                accepted.add(normalized)
-
-    if curr in accepted:
-        return "\u2705"  # OK - matches best or alt
+    if curr == best:
+        return "\u2705"  # OK - matches best model
 
     # Not the best model
     is_free_model = curr.endswith("-free") or curr in free_ids_norm
@@ -1402,7 +1299,7 @@ def generate_model_recommendation_table(
     """Generate the task-type model recommendation table.
 
     Columns: Task Type | Description | Best Zen | Best Free | Best Go
-    Each cell shows "Model (score)" with optional multiplier warning and alt model.
+    Each cell shows "Model (score)".
     """
     models = _lb_models(livebench)
     snapshot_date = (
@@ -1456,75 +1353,35 @@ def generate_model_recommendation_table(
         )
         go_score = get_model_score(best_go, livebench, priority) if best_go else None
 
-        # Build scored lists (sorted best-first) for finding alts without multiplier
-        zen_scored = []
-        for m in all_zen:
-            # Exclude Go-only models from Zen consideration
-            if m["id"] in go_ids:
-                continue
-            s = get_model_score(m["id"], livebench, priority)
-            if s is not None:
-                zen_scored.append((m["id"], s))
-        zen_scored.sort(key=lambda x: x[1], reverse=True)
-
-        free_scored = []
-        for m in free_models:
-            s = get_model_score(m["id"], livebench, priority)
-            if s is not None:
-                free_scored.append((m["id"], s))
-        free_scored.sort(key=lambda x: x[1], reverse=True)
-
-        go_scored = []
-        for m in all_zen:
-            if m["id"] not in go_ids:
-                continue
-            s = get_model_score(m["id"], livebench, priority)
-            if s is not None:
-                go_scored.append((m["id"], s))
-        go_scored.sort(key=lambda x: x[1], reverse=True)
-
-        # Find alt without multiplier for each column
-        zen_alt_raw = _find_best_without_multiplier(zen_scored) if has_token_multiplier(zen_id) else None
-        free_alt_raw = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
-        go_alt_raw = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
-
         # Prefix model IDs for display
         zen_id_disp = _add_model_prefix(zen_id, engine="opencode") if zen_id else None
         best_free_disp = _add_model_prefix(best_free, engine="opencode") if best_free else None
         best_go_disp = _add_model_prefix(best_go, engine="opencode-go") if best_go else None
-        zen_alt = _prefix_alt_tuple(zen_alt_raw, engine="opencode")
-        free_alt = _prefix_alt_tuple(free_alt_raw, engine="opencode")
-        go_alt = _prefix_alt_tuple(go_alt_raw, engine="opencode-go")
 
         # Highlight the winner based on free-first policy
         # Winner gets trophy emoji
         if best_free_disp and best_go_disp and best_free_disp == best_go_disp:
             # Same model (free model wins due to free-first rule)
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
-                alt_score=free_alt[1] if free_alt else None,
+                best_free_disp, free_score,
             )
             go_display = format_model_with_score(best_go_disp, go_score)
         elif best_go and best_free:
             # Different models - go model wins (free wasn't within threshold)
             free_display = format_model_with_score(
-                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
-                alt_score=free_alt[1] if free_alt else None,
+                best_free_disp, free_score,
             )
             go_display = "\U0001f3c6 " + format_model_with_score(
-                best_go_disp, go_score, alt_model_id=go_alt[0] if go_alt else None,
-                alt_score=go_alt[1] if go_alt else None,
+                best_go_disp, go_score,
             )
         elif best_go:
             free_display = "\u2014"
             go_display = "\U0001f3c6 " + format_model_with_score(
-                best_go_disp, go_score, alt_model_id=go_alt[0] if go_alt else None,
-                alt_score=go_alt[1] if go_alt else None,
+                best_go_disp, go_score,
             )
         elif best_free:
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
-                alt_score=free_alt[1] if free_alt else None,
+                best_free_disp, free_score,
             )
             go_display = "\u2014"
         else:
@@ -1532,8 +1389,7 @@ def generate_model_recommendation_table(
             go_display = "\u2014"
 
         zen_display = format_model_with_score(
-            zen_id_disp, zen_score, alt_model_id=zen_alt[0] if zen_alt else None,
-            alt_score=zen_alt[1] if zen_alt else None,
+            zen_id_disp, zen_score,
         )
 
         lines.append(
@@ -1555,7 +1411,6 @@ def generate_score_reference_table(
     Adds a "Best For" column that shows which task type each model is
     best suited for, based on its highest-scoring subscore relative to
     task_type priorities. Uses emoji badges for visual distinction.
-    Includes a "Token Mult" column for token consumption.
     """
     _ = zen_models  # kept for API compatibility
     all_model_ids = [m["id"] for m in free_models] + [m["id"] for m in go_models]
@@ -1595,8 +1450,8 @@ def generate_score_reference_table(
         "",
         "### LiveBench Score Reference",
         "",
-        "| Model | Tier | Source | Best For | Token Mult | Overall | Coding | Reasoning | Vision | Instruction Following |",
-        "|-------|------|--------|----------|------------|---------|--------|-----------|--------|----------------------|",
+        "| Model | Tier | Source | Best For | Overall | Coding | Reasoning | Vision | Instruction Following |",
+        "|-------|------|--------|----------|---------|--------|-----------|--------|----------------------|",
     ]
 
     for model_id in sorted(all_model_ids):
@@ -1608,10 +1463,6 @@ def generate_score_reference_table(
             src_icon = "\U0001f4cb Fallback"
         else:
             src_icon = "\u274c Missing"
-
-        # Token multiplier
-        mult = get_token_multiplier(model_id)
-        mult_cell = f"\u26a0\ufe0f x{mult}" if mult > 1.0 else "\u2014"
 
         # Best-for badges
         tasks = best_for_map.get(model_id, [])
@@ -1627,7 +1478,7 @@ def generate_score_reference_table(
         vs = get_model_score(model_id, livebench, "vision")
         if_ = get_model_score(model_id, livebench, "instruction_following")
         lines.append(
-            f"| `{model_id}` | {tier} | {src_icon} | {best_for_cell} | {mult_cell} | "
+            f"| `{model_id}` | {tier} | {src_icon} | {best_for_cell} | "
             + f"{ov if ov is not None else '—'} | {cd if cd is not None else '—'} | "
             + f"{re_s if re_s is not None else '—'} | {vs if vs is not None else '—'} | "
             + f"{if_ if if_ is not None else '—'} |"
@@ -1651,8 +1502,6 @@ def generate_workflow_audit_table(
     Recommended Zen (+XX%) | Recommended Free | Recommended Go | Status
     The "Recommended Zen" column shows the best Zen model with percentage
     difference vs current model as suffix (e.g., `model (+15%)`).
-    If a recommended model has a token multiplier, also shows the best
-    model without multiplier as alt.
     """
     if not scan_results:
         return "\n## Workflow Model Audit\n\n> No OpenCode workflows found (excluding maintenance workflow).\n"
@@ -1716,67 +1565,16 @@ def generate_workflow_audit_table(
             else:
                 zen_suffix = " (0%)"
 
-        # Build scored lists for finding alts without multiplier
-        zen_scored = []
-        for m in all_zen:
-            # Exclude Go-only models from Zen consideration
-            if m["id"] in go_ids:
-                continue
-            s = get_model_score(m["id"], livebench, priority)
-            if s is not None:
-                zen_scored.append((m["id"], s))
-        zen_scored.sort(key=lambda x: x[1], reverse=True)
-
-        free_scored = []
-        for m in free_models:
-            s = get_model_score(m["id"], livebench, priority)
-            if s is not None:
-                free_scored.append((m["id"], s))
-        free_scored.sort(key=lambda x: x[1], reverse=True)
-
-        go_scored = []
-        for m in all_zen:
-            if m["id"] not in go_ids:
-                continue
-            s = get_model_score(m["id"], livebench, priority)
-            if s is not None:
-                go_scored.append((m["id"], s))
-        go_scored.sort(key=lambda x: x[1], reverse=True)
-
         # Prefix model IDs for display
         zen_id_disp = _add_model_prefix(zen_id, engine="opencode") if zen_id else None
         best_free_disp = _add_model_prefix(best_free, engine="opencode") if best_free else None
         best_go_disp = _add_model_prefix(best_go, engine="opencode-go") if best_go else None
 
-        # Compute Zen cell with multiplier awareness
-        zen_alt_raw = _find_best_without_multiplier(zen_scored)
-        # For Zen column, we need % diff for alt too
-        zen_alt_info = None
-        if zen_alt_raw and has_token_multiplier(zen_id):
-            alt_id, alt_score = zen_alt_raw
-            # Prefix the alt ID
-            alt_id_disp = _add_model_prefix(alt_id, engine="opencode")
-            zen_alt_suffix = ""
-            if alt_score is not None and current_score is not None and current_score > 0:
-                alt_pct = ((alt_score - current_score) / current_score) * 100
-                if abs(alt_pct) >= 0.5:
-                    zen_alt_suffix = f" (+{alt_pct:.0f}%)" if alt_pct > 0 else f" ({alt_pct:.0f}%)"
-                else:
-                    zen_alt_suffix = " (0%)"
-            zen_alt_info = (alt_id_disp, alt_score, zen_alt_suffix)
-
         # Format Zen cell
         if zen_id_disp:
-            if has_token_multiplier(zen_id) and zen_alt_info:
-                alt_id, alt_score, alt_suf = zen_alt_info
-                zen_display = format_model_with_score(
-                    zen_id_disp, zen_score, score_suffix=zen_suffix,
-                    alt_model_id=alt_id, alt_score=f"{alt_score}{alt_suf}",
-                )
-            else:
-                zen_display = format_model_with_score(
-                    zen_id_disp, zen_score, score_suffix=zen_suffix,
-                )
+            zen_display = format_model_with_score(
+                zen_id_disp, zen_score, score_suffix=zen_suffix,
+            )
         else:
             zen_display = "\u2014"
 
@@ -1801,24 +1599,8 @@ def generate_workflow_audit_table(
             if abs(pct) >= 1:
                 diff_str = f" (+{pct:.0f}%)" if pct > 0 else f" ({pct:.0f}%)"
 
-        # Alt for free and go recommendations
-        free_alt_raw = _find_best_without_multiplier(free_scored) if best_free and has_token_multiplier(best_free) else None
-        go_alt_raw = _find_best_without_multiplier(go_scored) if best_go and has_token_multiplier(best_go) else None
-        free_alt = _prefix_alt_tuple(free_alt_raw, engine="opencode")
-        go_alt = _prefix_alt_tuple(go_alt_raw, engine="opencode-go")
-        # For free/go alt scores, bake diff_str in since format_model_with_score
-        # no longer appends score_suffix to alt_score (avoids double-suffix)
-        go_alt_score_baked = f"{go_alt[1]}{diff_str}" if go_alt and diff_str else (go_alt[1] if go_alt else None)
-        free_alt_score_baked = f"{free_alt[1]}{diff_str}" if free_alt and diff_str else (free_alt[1] if free_alt else None)
-
-        # Determine alt models (best without multiplier) for status check
-        status_alts = []
-        if go_alt_raw:
-            status_alts.append(go_alt_raw[0])
-        if best_free and best_go and best_free == best_go and free_alt_raw:
-            status_alts.append(free_alt_raw[0])
         status = classify_model_status(
-            current, best_free, best_go, alt_models=status_alts or None,
+            current, best_free, best_go,
             free_ids=free_ids,
         )
 
@@ -1826,31 +1608,24 @@ def generate_workflow_audit_table(
         if best_free and best_go and best_free == best_go:
             # Same model - show in both columns with trophy on free (preferred)
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
-                alt_score=free_alt[1] if free_alt else None,
+                best_free_disp, free_score,
             )
             go_display = format_model_with_score(best_go_disp, go_score)
         elif best_go and best_free:
             free_display = format_model_with_score(
-                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
-                alt_score=free_alt_score_baked if free_alt else None,
+                best_free_disp, free_score,
             )
             go_display = "\U0001f3c6 " + format_model_with_score(
                 best_go_disp, go_score, score_suffix=diff_str,
-                alt_model_id=go_alt[0] if go_alt else None,
-                alt_score=go_alt_score_baked if go_alt else None,
             )
         elif best_go:
             free_display = "\u2014"
             go_display = "\U0001f3c6 " + format_model_with_score(
                 best_go_disp, go_score, score_suffix=diff_str,
-                alt_model_id=go_alt[0] if go_alt else None,
-                alt_score=go_alt_score_baked if go_alt else None,
             )
         elif best_free:
             free_display = "\U0001f3c6 " + format_model_with_score(
-                best_free_disp, free_score, alt_model_id=free_alt[0] if free_alt else None,
-                alt_score=free_alt_score_baked if free_alt else None,
+                best_free_disp, free_score,
             )
             go_display = "\u2014"
         else:
@@ -1883,7 +1658,6 @@ def generate_workflow_audit_table(
         + "\u274c Error (wrong model) \u00b7 "
         + "\U0001f480 Fatal (model not set). "
         + "\U0001f3c6 marks the preferred model after free-first policy (free within 5% of best Go \u2192 prefer free). "
-        + "\u26a0\ufe0f xN marks models with elevated token consumption. "
         + "\u2699\ufe0f marks steps resolved at runtime from the central config "
         + "(`data/model-config.json`). "
         + "Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._"
@@ -2031,43 +1805,13 @@ def main() -> None:
             (t["priority"] for t in task_types if t["name"] == task_type), "overall"
         )
 
-        # Compute alt models (best without token multiplier) for status + display
-        status_alts = []
-        go_alt_id = None
-        if best_go and has_token_multiplier(best_go):
-            go_scored = []
-            for m in all_zen_models:
-                if m["id"] not in go_ids:
-                    continue
-                s = get_model_score(m["id"], livebench, priority)
-                if s is not None:
-                    go_scored.append((m["id"], s))
-            go_scored.sort(key=lambda x: x[1], reverse=True)
-            go_alt = _find_best_without_multiplier(go_scored)
-            if go_alt:
-                go_alt_id = go_alt[0]
-                status_alts.append(go_alt_id)
-        free_alt_id = None
-        if best_free and has_token_multiplier(best_free):
-            free_scored = []
-            for m in free_models:
-                s = get_model_score(m["id"], livebench, priority)
-                if s is not None:
-                    free_scored.append((m["id"], s))
-            free_scored.sort(key=lambda x: x[1], reverse=True)
-            free_alt = _find_best_without_multiplier(free_scored)
-            if free_alt:
-                free_alt_id = free_alt[0]
-                if best_go and best_free == best_go:
-                    status_alts.append(free_alt_id)
-
         # Resolver-based steps (model from central config) that could not be
         # resolved from the committed config are treated as optimal.
         if current == "__auto__":
             status = "\u2705"
         else:
             status = classify_model_status(
-                current, best_free, best_go, alt_models=status_alts or None,
+                current, best_free, best_go,
                 free_ids=free_ids,
             )
 
@@ -2110,14 +1854,6 @@ def main() -> None:
                 "auto": r.get("auto", False),
                 "recommended_free": best_free,
                 "recommended_go": best_go,
-                "recommended_free_alt": free_alt_id,
-                "recommended_go_alt": go_alt_id,
-                "recommended_free_multiplier": get_token_multiplier(best_free)
-                if best_free
-                else None,
-                "recommended_go_multiplier": get_token_multiplier(best_go)
-                if best_go
-                else None,
                 "preferred_tier": preferred_tier,
                 "preferred_diff": preferred_diff,
                 "status": status,
@@ -2126,9 +1862,7 @@ def main() -> None:
 
     # 7b. Compute the proposed central model config — never applied to the
     # committed file; drift is reported (not applied) and flows into the issue.
-    # alt_workflows (when actionable) rides along in the drift data so the
-    # issue can offer the alt checkbox — no separate alt config file exists.
-    config_drift, alt_workflows = generate_model_config(
+    config_drift = generate_model_config(
         scan_results, audit_results, go_ids, livebench
     )
 
@@ -2158,7 +1892,6 @@ def main() -> None:
                     if config_drift
                     else {}
                 ),
-                "alt_workflows": alt_workflows or {},
             },
             "results": audit_results,
         },
@@ -2190,8 +1923,6 @@ def main() -> None:
     print(f"  Model config: {MODEL_CONFIG_PATH}")
     if config_drift:
         print(f"  ! Config drift — proposal at {MODEL_CONFIG_PROPOSED_PATH} (requires PR)")
-        if alt_workflows:
-            print("  ! Alt model proposal available — issue offers an alt checkbox")
     print("=" * 60)
 
     # Exit with error code if any \u274c (Error), \u2757 (Alert), or \U0001f480 (Fatal) found (for CI) or coverage issues

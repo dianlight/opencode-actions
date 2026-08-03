@@ -58,7 +58,7 @@ Authorization gate: all workflows require `author_association` in `OWNER/MEMBER/
 
 `data/model-config.json` is the **actual configuration** consumed by every OpenCode step at startup via `resolve-model.sh` (`model: ${{ steps.resolve.outputs.MODEL }}`) — the audit marks these steps with ⚙️.
 
-The maintenance script computes a **proposed** config each run but never writes over the committed one. If the proposal differs, it saves `data/model-config.proposed.json` (gitignored) and the workflow opens/updates a maintenance issue with the diff. When a recommendation carries a token multiplier (⚠️ xN), the issue also offers a second checkbox ("Apply the proposed model config update using alt models") that applies the same proposal with the cheaper **alt** models (best without multiplier); the alt proposal rides along in the issue's drift data and is written straight into `data/model-config.json` via the PR — no separate alt config file. The config changes only through an issue + PR review: check the issue's "Apply the proposed model config update" box and OpenCode opens a PR — merging it is the human gate. The `Commit changes` step excludes `data/model-config.json` from the auto-commit.
+The maintenance script computes a **proposed** config each run but never writes over the committed one. If the proposal differs, it saves `data/model-config.proposed.json` (gitignored) and the workflow opens/updates a maintenance issue with the diff. The config changes only through an issue + PR review: check the issue's "Apply the proposed model config update" box and OpenCode opens a PR — merging it is the human gate. The `Commit changes` step excludes `data/model-config.json` from the auto-commit.
 
 To change a model: never edit workflow files. Run `mise run maintenance`, review the proposed config in the resulting issue, and merge a PR that updates `data/model-config.json` — downstream workflows pick it up automatically at their next run.
 
@@ -76,7 +76,7 @@ To change a model: never edit workflow files. Run `mise run maintenance`, review
 - `.yamllint` — 180-char line limit for GitHub Actions expressions, 2-space indent, truthy rule relaxed
 - `config/task-types.yaml` — task type definitions with signal keywords and priority subscores
 - `config/workflow-task-map.yaml` — workflow→task type mapping with job-level overrides
-- `config/model-scores.yaml` — static fallback scores for models not on LiveBench (also includes `token_multipliers` config)
+- `config/model-scores.yaml` — static fallback scores for models not on LiveBench
 - `ruff.toml` — ruff linter configuration (Python)
 
 ## Workflow conventions

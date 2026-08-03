@@ -3,10 +3,12 @@
 - Fetch Zen model prices from the Zen docs pricing page during maintenance and
   store them per model in `data/zen_models.json`; treat models published as
   "Free" (e.g. `big-pickle`, which has no `-free` suffix) as usable free models
-- Maintenance issues offer a second checkbox to apply the proposed model config
-  with **alt models** (token-multiplier models replaced by their cheaper alt);
-  checking it makes OpenCode open a PR that writes the alt models straight into
-  `data/model-config.json`
+
+### Removed
+- Drop the **alt models** concept and its token-multiplier-driven second
+  checkbox from maintenance issues, and remove `token_multipliers` from
+  `config/model-scores.yaml`; the maintenance issue now offers only the single
+  "Apply the proposed model config update" checkbox
 
 ### Fixed
 - Restore emoji icons (✅/📋/❌) in the README LiveBench Score Reference

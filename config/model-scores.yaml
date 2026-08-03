@@ -71,9 +71,3 @@ model_scores:
     overall: 61.5             # ORPT-Bench composite (correctness-weighted)
     reasoning: 61.5
     vision: 8.0               # text-only, no vision encoder
-
-# Token consumption multipliers (>1.0 means the model consumes proportionally more tokens)
-# Key: normalised model name (without provider prefix or -free suffix)
-# Value: multiplier (e.g. 2.0 = x2 token consumption)
-token_multipliers:
-  kimi-k3: 2.0
