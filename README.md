@@ -9,8 +9,8 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-08-02 22:36 UTC**.
-> LiveBench data: **324 models scored**.
+> Last updated: **2026-08-03 21:34 UTC**.
+> LiveBench data: **325 models scored**.
 > LiveBench snapshot: **2026_06_25**.
 > Source: https://livebench.ai/table_2026_06_25.csv
 > Free-first threshold: **5%**.
@@ -64,10 +64,11 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `qwen3.6-plus` | Go (Paid) | ✅ LiveBench | Plan, Review | — | 69.0 | 56.1 | 77.0 | 52.5 | 67.7 |
 | `qwen3.7-max` | Go (Paid) | ✅ LiveBench | Plan, Review | — | 74.1 | 55.8 | 82.4 | 58.7 | 76.6 |
 | `qwen3.7-plus` | Go (Paid) | 📋 Fallback | Plan, Ask | — | 66.0 | 62.0 | 72.0 | 62.0 | 72.0 |
+| `qwen3.8-max` | Go (Paid) | ❌ Missing | — | — | — | — | — | — | — |
 
 ## Workflow Model Audit
 
-> Audited: **2026-08-02 22:36 UTC**
+> Audited: **2026-08-03 21:34 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 
