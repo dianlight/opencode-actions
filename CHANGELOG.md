@@ -7,6 +7,10 @@
 ### Fixed
 - Restore emoji icons (✅/📋/❌) in the README LiveBench Score Reference
   Source column, replacing the plain `v`/`f`/`x` letters
+- Fix `Handle Checked Tasks` failing with `Duplicate header: Authorization` by
+  passing `use_github_token: true` to the OpenCode action (the OIDC token
+  exchange previously added a second `Authorization` header on top of the one
+  persisted by `actions/checkout`); checkout now also fetches full history
 
 
 ## [0.1.0]

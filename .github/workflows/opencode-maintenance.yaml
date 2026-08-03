@@ -435,6 +435,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Check authorization
         env:
@@ -545,6 +547,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
           model: ${{ steps.resolve.outputs.MODEL }}
+          use_github_token: true
           prompt: |
             You are triggered by a user checking task checkboxes in a maintenance issue.
 
