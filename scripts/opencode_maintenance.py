@@ -49,9 +49,6 @@ COVERAGE_ISSUES_PATH = DATA_DIR / "coverage_issues.json"
 MODEL_CONFIG_PATH = DATA_DIR / "model-config.json"
 # Proposed config written when the run recommends a change (gitignored).
 MODEL_CONFIG_PROPOSED_PATH = DATA_DIR / "model-config.proposed.json"
-# Optional alt proposal (gitignored): same config with token-multiplier models
-# replaced by their cheaper alt, published when it is actionable.
-MODEL_CONFIG_PROPOSED_ALT_PATH = DATA_DIR / "model-config.proposed-alt.json"
 
 # --- Constants ---
 ZEN_URL = "https://opencode.ai/zen/v1/models"
@@ -876,16 +873,25 @@ def generate_model_config(
     audit_results: list[dict[str, Any]],
     go_ids: set[str],
     livebench: dict[str, Any],
-) -> bool:
+) -> tuple[bool, dict[str, Any] | None]:
     """Compute the proposed central model config — without applying it.
 
     The committed data/model-config.json is the actual configuration and is
     only changed through an issue + PR review, never automatically. Each entry
     uses the audit recommendation for the step's task type (prefixed, e.g.
     `opencode-go/kimi-k3`), falling back to the model currently pinned in the
-    workflow. Returns True when the proposal differs from the committed config
-    (drift): the proposal is saved to data/model-config.proposed.json so the
-    workflow can open a review issue, and the committed file is left untouched.
+    workflow.
+
+    Returns (drift, alt_workflows): drift is True when the proposal differs
+    from the committed config (the proposal is saved to
+    data/model-config.proposed.json so the workflow can open a review issue,
+    and the committed file is left untouched). alt_workflows is the optional
+    proposal with token-multiplier models replaced by their cheaper alt (best
+    model without a multiplier), or None when it is not actionable — identical
+    to the default proposal or to the committed config — so the issue only
+    offers the alt checkbox when checking it would actually change
+    data/model-config.json. No separate alt config file is involved: applying
+    the alt writes data/model-config.json directly via the PR.
     """
     workflows: dict[str, Any] = {}
     alt_workflows: dict[str, Any] = {}
@@ -907,8 +913,8 @@ def generate_model_config(
             "go": go_model,
             "free": free_model,
         }
-        # Alt proposal entry: swap in the best model without a token multiplier
-        # (the audit's *alt) so the same change can be applied more cheaply.
+        # Alt entry: swap in the best model without a token multiplier (the
+        # audit's *alt) so the same change can be applied more cheaply.
         alt_go = entry.get("recommended_go_alt")
         alt_free = entry.get("recommended_free_alt")
         alt_workflows.setdefault(stem, {})[r["job_id"]] = {
@@ -924,54 +930,32 @@ def generate_model_config(
         "workflows": workflows,
     }
 
-    current_workflows: dict[str, Any] = {}
+    def actionable_alt(current_wf: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the alt proposal only when checking it changes something."""
+        if alt_workflows != workflows and alt_workflows != current_wf:
+            return alt_workflows
+        return None
+
     if not MODEL_CONFIG_PATH.exists():
         # No committed config yet: the resolver fails closed without one, so
         # the proposal must land via PR too — never write it in place.
         save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
         print(f"  ! No committed config found — proposal saved to {MODEL_CONFIG_PROPOSED_PATH} (add via issue + PR review)")
-        _write_alt_proposal(alt_workflows, workflows, current_workflows, proposed)
-        return True
+        return True, actionable_alt({})
 
     current = _load_model_config()
     current_workflows = current.get("workflows") or {}
     if current_workflows == proposed["workflows"]:
         print("  v Central model config unchanged")
-        MODEL_CONFIG_PROPOSED_ALT_PATH.unlink(missing_ok=True)
-        return False
+        return False, None
 
     save_json(MODEL_CONFIG_PROPOSED_PATH, proposed)
     print(f"  ! Model config drift detected — NOT applied; proposal saved to {MODEL_CONFIG_PROPOSED_PATH}")
     print("  ! Committed data/model-config.json changes only via issue + PR review")
-    _write_alt_proposal(alt_workflows, workflows, current_workflows, proposed)
-    return True
-
-
-def _write_alt_proposal(
-    alt_workflows: dict[str, Any],
-    default_workflows: dict[str, Any],
-    current_workflows: dict[str, Any],
-    proposed: dict[str, Any],
-) -> None:
-    """Publish the optional alt model config proposal, or remove a stale one.
-
-    The alt proposal replaces token-multiplier models with their cheaper alt.
-    It is only saved when actionable — it differs from the default proposal AND
-    from the committed config — so checking the alt box never opens an empty PR.
-    """
-    actionable = (
-        alt_workflows != default_workflows and alt_workflows != current_workflows
-    )
-    if actionable:
-        alt_proposed = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "livebench_snapshot": proposed.get("livebench_snapshot"),
-            "workflows": alt_workflows,
-        }
-        save_json(MODEL_CONFIG_PROPOSED_ALT_PATH, alt_proposed)
-        print(f"  ! Alt model proposal saved to {MODEL_CONFIG_PROPOSED_ALT_PATH} (apply via issue + PR review)")
-    else:
-        MODEL_CONFIG_PROPOSED_ALT_PATH.unlink(missing_ok=True)
+    alt = actionable_alt(current_workflows)
+    if alt:
+        print("  ! Alt model proposal available — apply via the issue's alt checkbox")
+    return True, alt
 
 
 def classify_task_type(
@@ -2142,7 +2126,9 @@ def main() -> None:
 
     # 7b. Compute the proposed central model config — never applied to the
     # committed file; drift is reported (not applied) and flows into the issue.
-    config_drift = generate_model_config(
+    # alt_workflows (when actionable) rides along in the drift data so the
+    # issue can offer the alt checkbox — no separate alt config file exists.
+    config_drift, alt_workflows = generate_model_config(
         scan_results, audit_results, go_ids, livebench
     )
 
@@ -2172,6 +2158,7 @@ def main() -> None:
                     if config_drift
                     else {}
                 ),
+                "alt_workflows": alt_workflows or {},
             },
             "results": audit_results,
         },
@@ -2203,6 +2190,8 @@ def main() -> None:
     print(f"  Model config: {MODEL_CONFIG_PATH}")
     if config_drift:
         print(f"  ! Config drift — proposal at {MODEL_CONFIG_PROPOSED_PATH} (requires PR)")
+        if alt_workflows:
+            print("  ! Alt model proposal available — issue offers an alt checkbox")
     print("=" * 60)
 
     # Exit with error code if any \u274c (Error), \u2757 (Alert), or \U0001f480 (Fatal) found (for CI) or coverage issues

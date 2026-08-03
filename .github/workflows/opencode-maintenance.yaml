@@ -253,19 +253,20 @@ jobs:
               except (OSError, json.JSONDecodeError):
                   proposed_cfg = {}
               # Optional alt proposal: token-multiplier models replaced by their
-              # cheaper alt (written by the maintenance script only when it is
-              # actionable, i.e. differs from the default proposal and from the
-              # committed config).
-              alt_cfg = {}
-              try:
-                  with open("data/model-config.proposed-alt.json") as pf:
-                      alt_cfg = json.load(pf)
-              except (OSError, json.JSONDecodeError):
-                  alt_cfg = {}
+              # cheaper alt. The maintenance script embeds it in the drift data
+              # only when it is actionable (differs from the default proposal
+              # and from the committed config). Applying it writes
+              # `data/model-config.json` directly (via PR review) — there is no
+              # separate alt config file.
+              alt_workflows = drift.get("alt_workflows") or {}
               has_alt = bool(
-                  alt_cfg
-                  and (alt_cfg.get("workflows") or {}) != (proposed_cfg.get("workflows") or {})
+                  alt_workflows
+                  and alt_workflows != (proposed_cfg.get("workflows") or {})
               )
+              alt_cfg = {}
+              if has_alt:
+                  alt_cfg = dict(proposed_cfg)
+                  alt_cfg["workflows"] = alt_workflows
 
               lines.append("## \u2699\ufe0f Model Config Update Proposed")
               lines.append("")
@@ -291,7 +292,7 @@ jobs:
               rows = []
               alt_rows = []
               for stem, jobs in (proposed_cfg.get("workflows") or {}).items():
-                  alt_jobs = (alt_cfg.get("workflows") or {}).get(stem, {})
+                  alt_jobs = alt_workflows.get(stem, {})
                   for job_id, pair in (jobs or {}).items():
                       cur_entry = (drift.get("current_workflows") or {}).get(stem, {}).get(job_id, {})
                       for tier in ("go", "free"):
@@ -327,7 +328,7 @@ jobs:
               lines.append("```")
               if has_alt:
                   lines.append("")
-                  lines.append("Alt model proposal (`data/model-config.proposed-alt.json`):")
+                  lines.append("Alt model proposal:")
                   lines.append("")
                   lines.append("```json")
                   lines.append(json.dumps(alt_cfg, indent=2))

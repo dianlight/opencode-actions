@@ -5,8 +5,8 @@
   "Free" (e.g. `big-pickle`, which has no `-free` suffix) as usable free models
 - Maintenance issues offer a second checkbox to apply the proposed model config
   with **alt models** (token-multiplier models replaced by their cheaper alt);
-  checking it makes OpenCode open a PR from the alt proposal
-  (`data/model-config.proposed-alt.json`)
+  checking it makes OpenCode open a PR that writes the alt models straight into
+  `data/model-config.json`
 
 ### Fixed
 - Restore emoji icons (✅/📋/❌) in the README LiveBench Score Reference
