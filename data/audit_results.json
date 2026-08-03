@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-03T22:40:27.377290+00:00",
+  "timestamp": "2026-08-03T22:43:34.664560+00:00",
   "livebench_snapshot": "2026_06_25",
   "livebench_source": "https://livebench.ai/table_2026_06_25.csv",
   "livebench_models": 325,
@@ -9,16 +9,16 @@
   "steps_audited": 7,
   "model_config_drift": {
     "detected": true,
-    "timestamp": "2026-08-03T22:40:27.377301+00:00",
+    "timestamp": "2026-08-03T22:43:34.664572+00:00",
     "livebench_snapshot": "2026_06_25",
     "current_workflows": {
       "opencode-issue-handler": {
         "process-4": {
-          "go": "opencode-go/qwen3.7-max",
+          "go": "opencode-go/qwen3.8-max",
           "free": "opencode/deepseek-v4-flash-free"
         },
         "process-5": {
-          "go": "opencode-go/glm-5.1",
+          "go": "opencode-go/qwen3.8-max",
           "free": "opencode/nemotron-3-ultra-free"
         }
       },
@@ -57,14 +57,14 @@
       "job": "process-4",
       "step": "Run opencode (Process 4 \u2014 Issue Review & Refinement)",
       "task_type": "issue-triage",
-      "current_model": "opencode-go/qwen3.7-max",
+      "current_model": "opencode-go/qwen3.8-max",
       "current_model_free": "opencode/deepseek-v4-flash-free",
       "auto": true,
       "recommended_free": "deepseek-v4-flash-free",
       "recommended_go": "qwen3.8-max",
       "preferred_tier": "go",
       "preferred_diff": 35,
-      "status": "\u274c"
+      "status": "\u2705"
     },
     {
       "file": ".github/workflows/opencode-issue-handler.yml",
@@ -72,14 +72,14 @@
       "job": "process-5",
       "step": "Run opencode (Process 5 \u2014 Issue Work & PR Creation)",
       "task_type": "issue-implementation",
-      "current_model": "opencode-go/glm-5.1",
+      "current_model": "opencode-go/qwen3.8-max",
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
       "recommended_free": "big-pickle",
       "recommended_go": "qwen3.8-max",
       "preferred_tier": "go",
       "preferred_diff": 15,
-      "status": "\u274c"
+      "status": "\u2705"
     },
     {
       "file": ".github/workflows/opencode-maintenance.yaml",

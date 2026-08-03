@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-08-03 22:40 UTC**.
+> Last updated: **2026-08-03 22:43 UTC**.
 > LiveBench data: **325 models scored**.
 > LiveBench snapshot: **2026_06_25**.
 > Source: https://livebench.ai/table_2026_06_25.csv
@@ -68,14 +68,14 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-08-03 22:40 UTC**
+> Audited: **2026-08-03 22:43 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|-----------------|------------------|----------------|--------|
-| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode-go/qwen3.7-max` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5.5-pro` (81.6 (+7%)) | `opencode/deepseek-v4-flash-free` (69.4) | 🏆 `opencode-go/qwen3.8-max` (93.9 (+35%)) | ❌ |
-| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode-go/glm-5.1` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+14%)) | `opencode/big-pickle` (67.0) | 🏆 `opencode-go/qwen3.8-max` (77.0 (+15%)) | ❌ |
+| `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode-go/qwen3.8-max` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5.5-pro` (81.6 (-13%)) | `opencode/deepseek-v4-flash-free` (69.4) | 🏆 `opencode-go/qwen3.8-max` (93.9 (+35%)) | ✅ |
+| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode-go/qwen3.8-max` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (-7%)) | `opencode/big-pickle` (67.0) | 🏆 `opencode-go/qwen3.8-max` (77.0 (+15%)) | ✅ |
 | `OpenCode Maintenance` | `Handle Checked Tasks` | `Run OpenCode for checked tasks` | `code-implementation` | `opencode-go/glm-5.1` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+14%)) | `opencode/big-pickle` (67.0) | 🏆 `opencode-go/qwen3.8-max` (77.0 (+15%)) | ❌ |
 | `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (95.5 (+31%)) | ❌ |
 | `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (95.5 (+31%)) | ❌ |
