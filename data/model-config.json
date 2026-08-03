@@ -4,11 +4,11 @@
   "workflows": {
     "opencode-issue-handler": {
       "process-4": {
-        "go": "opencode-go/qwen3.7-max",
+        "go": "opencode-go/qwen3.8-max",
         "free": "opencode/deepseek-v4-flash-free"
       },
       "process-5": {
-        "go": "opencode-go/glm-5.1",
+        "go": "opencode-go/qwen3.8-max",
         "free": "opencode/nemotron-3-ultra-free"
       }
     },
