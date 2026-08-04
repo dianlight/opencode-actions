@@ -50,9 +50,12 @@ if [[ -f "data/model-config.json" ]]; then
 elif [[ -f "$CACHE_FILE" ]]; then
   CONFIG_FILE="$CACHE_FILE"
   CONFIG_SOURCE="cache"
-elif curl -fsSL --connect-timeout 5 --max-time 15 "$CONFIG_URL" -o "$CACHE_FILE" 2>/dev/null; then
+elif curl -fsSL --connect-timeout 5 --max-time 15 "$CONFIG_URL" -o "$CACHE_FILE.tmp" 2>/dev/null; then
+  mv -f "$CACHE_FILE.tmp" "$CACHE_FILE"
   CONFIG_FILE="$CACHE_FILE"
   CONFIG_SOURCE="remote"
+else
+  rm -f "$CACHE_FILE.tmp"
 fi
 
 if [[ -z "$CONFIG_FILE" ]]; then
@@ -69,14 +72,31 @@ workflow, job, path = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
     with open(path) as fh:
         data = json.load(fh)
-    entry = (data.get("workflows") or {}).get(workflow, {}).get(job, {})
-    print(entry.get("go") or "")
-    print(entry.get("free") or "")
-except Exception:
-    print("")
-    print("")
+    workflows = data.get("workflows")
+    if workflows is not None and not isinstance(workflows, dict):
+        raise ValueError("'workflows' must be an object")
+    mapping = (workflows or {}).get(workflow)
+    if mapping is not None and not isinstance(mapping, dict):
+        raise ValueError(f"workflow '{workflow}' must be an object")
+    if not mapping:
+        entry = {}
+    else:
+        entry = mapping.get(job)
+        if entry is None:
+            entry = {}
+        elif not isinstance(entry, dict):
+            raise ValueError(f"job '{job}' must be an object")
+    for key in ("go", "free"):
+        value = entry.get(key)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"tier '{key}' must be a string")
+except Exception as exc:
+    print(f"::error::Invalid or unreadable model config {path}: {exc}", file=sys.stderr)
+    sys.exit(4)
+print(entry.get("go") or "")
+print(entry.get("free") or "")
 PYEOF
-)"
+)" || exit 4
 GO_MODEL="$(printf '%s' "$RESOLVED" | sed -n '1p')"
 FREE_MODEL="$(printf '%s' "$RESOLVED" | sed -n '2p')"
 
