@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-03T22:17:39.000000+00:00",
+  "timestamp": "2026-08-04T12:36:43.178315+00:00",
   "livebench_snapshot": "2026_06_25",
   "workflows": {
     "opencode-issue-handler": {
@@ -8,33 +8,33 @@
         "free": "opencode/deepseek-v4-flash-free"
       },
       "process-5": {
-        "go": "opencode-go/qwen3.8-max",
-        "free": "opencode/nemotron-3-ultra-free"
+        "go": "opencode/big-pickle",
+        "free": "opencode/big-pickle"
       }
     },
     "opencode-maintenance": {
       "handle-checkbox-task": {
-        "go": "opencode-go/glm-5.1",
-        "free": "opencode/nemotron-3-ultra-free"
+        "go": "opencode/big-pickle",
+        "free": "opencode/big-pickle"
       }
     },
     "opencode-pr-comment": {
       "process-2": {
-        "go": "opencode-go/grok-4.5",
+        "go": "opencode-go/qwen3.8-max",
         "free": "opencode/deepseek-v4-flash-free"
       },
       "process-3": {
-        "go": "opencode-go/grok-4.5",
+        "go": "opencode-go/qwen3.8-max",
         "free": "opencode/deepseek-v4-flash-free"
       },
       "process-6": {
-        "go": "opencode-go/glm-5.1",
-        "free": "opencode/nemotron-3-ultra-free"
+        "go": "opencode/big-pickle",
+        "free": "opencode/big-pickle"
       }
     },
     "opencode-pr-review": {
       "review": {
-        "go": "opencode-go/grok-4.5",
+        "go": "opencode-go/qwen3.8-max",
         "free": "opencode/deepseek-v4-flash-free"
       }
     }

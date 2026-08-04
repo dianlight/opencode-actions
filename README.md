@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-08-04 12:36 UTC**.
+> Last updated: **2026-08-04 12:39 UTC**.
 > LiveBench data: **326 models scored**.
 > LiveBench snapshot: **2026_06_25**.
 > Source: https://livebench.ai/table_2026_06_25.csv
@@ -68,18 +68,18 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-08-04 12:36 UTC**
+> Audited: **2026-08-04 12:39 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 
 | Workflow | Job | Step | Task Type | Current Model | Recommended Zen | Recommended Free | Recommended Go | Status |
 |----------|-----|------|-----------|---------------|-----------------|------------------|----------------|--------|
 | `opencode-issue-handler` | `process-4` | `Run opencode (Process 4 — Issue Review & Refinement)` | `issue-triage` | `opencode-go/qwen3.8-max` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5.5-pro` (81.6 (+6%)) | `opencode/deepseek-v4-flash-free` (69.4) | 🏆 `opencode-go/qwen3.8-max` (77.2 (+11%)) | ✅ |
-| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode-go/qwen3.8-max` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+6%)) | 🏆 `opencode/big-pickle` (67.0) | `opencode-go/big-pickle` (67.0) | ❗ |
-| `OpenCode Maintenance` | `Handle Checked Tasks` | `Run OpenCode for checked tasks` | `code-implementation` | `opencode-go/glm-5.1` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+14%)) | 🏆 `opencode/big-pickle` (67.0) | `opencode-go/big-pickle` (67.0) | ❗ |
-| `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (87.9 (+20%)) | ❌ |
-| `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (87.9 (+20%)) | ❌ |
-| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `code-implementation` | `opencode-go/glm-5.1` (`/ocf`: `opencode/nemotron-3-ultra-free`) ⚙️ | `opencode/claude-fable-5` (71.7 (+14%)) | 🏆 `opencode/big-pickle` (67.0) | `opencode-go/big-pickle` (67.0) | ❗ |
-| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode-go/grok-4.5` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+11%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (87.9 (+20%)) | ❌ |
+| `opencode-issue-handler` | `process-5` | `Run opencode (Process 5 — Issue Work & PR Creation)` | `issue-implementation` | `opencode/big-pickle` (`/ocf`: `opencode/big-pickle`) ⚙️ | `opencode/claude-fable-5` (71.7 (+7%)) | 🏆 `opencode/big-pickle` (67.0) | `opencode-go/big-pickle` (67.0) | ✅ |
+| `OpenCode Maintenance` | `Handle Checked Tasks` | `Run OpenCode for checked tasks` | `code-implementation` | `opencode/big-pickle` (`/ocf`: `opencode/big-pickle`) ⚙️ | `opencode/claude-fable-5` (71.7 (+7%)) | 🏆 `opencode/big-pickle` (67.0) | `opencode-go/big-pickle` (67.0) | ✅ |
+| `opencode-pr-comment` | `process-2` | `Run opencode (Process 2 — Bot thread reply)` | `pr-review` | `opencode-go/qwen3.8-max` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+9%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (87.9 (+20%)) | ✅ |
+| `opencode-pr-comment` | `process-3` | `Run opencode (Process 3 — User-owned thread takeover)` | `pr-review` | `opencode-go/qwen3.8-max` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+9%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (87.9 (+20%)) | ✅ |
+| `opencode-pr-comment` | `process-6` | `Run opencode (Process 6 — PR Task Execution)` | `code-implementation` | `opencode/big-pickle` (`/ocf`: `opencode/big-pickle`) ⚙️ | `opencode/claude-fable-5` (71.7 (+7%)) | 🏆 `opencode/big-pickle` (67.0) | `opencode-go/big-pickle` (67.0) | ✅ |
+| `opencode-pr-review` | `review` | `Run opencode (PR code review)` | `pr-review` | `opencode-go/qwen3.8-max` (`/ocf`: `opencode/deepseek-v4-flash-free`) ⚙️ | `opencode/gpt-5-codex` (96.1 (+9%)) | `opencode/deepseek-v4-flash-free` (73.1) | 🏆 `opencode-go/qwen3.8-max` (87.9 (+20%)) | ✅ |
 
 _Legend: ✅ Optimal · ⚠️ Warn (free, not best) · ❗ Alert (paid when free is preferred) · ❌ Error (wrong model) · 💀 Fatal (model not set). 🏆 marks the preferred model after free-first policy (free within 5% of best Go → prefer free). ⚙️ marks steps resolved at runtime from the central config (`data/model-config.json`). Recommended Zen shows best Zen model with score difference vs current model (e.g., `model (+15%)`)._
