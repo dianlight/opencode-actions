@@ -1,4 +1,25 @@
 {
-  "stale_fallback": [],
+  "stale_fallback": [
+    {
+      "model": "qwen3.8-max",
+      "livebench_scores": {
+        "coding": 67.9,
+        "reasoning": 87.9,
+        "vision": 58.6,
+        "instruction_following": 77.2,
+        "overall": 79.5
+      }
+    },
+    {
+      "model": "qwen3.8-max-free",
+      "livebench_scores": {
+        "coding": 67.9,
+        "reasoning": 87.9,
+        "vision": 58.6,
+        "instruction_following": 77.2,
+        "overall": 79.5
+      }
+    }
+  ],
   "missing_scores": []
 }

@@ -1,15 +1,15 @@
 {
-  "timestamp": "2026-08-03T22:43:34.664560+00:00",
+  "timestamp": "2026-08-04T12:36:43.178505+00:00",
   "livebench_snapshot": "2026_06_25",
   "livebench_source": "https://livebench.ai/table_2026_06_25.csv",
-  "livebench_models": 325,
+  "livebench_models": 326,
   "free_models": 7,
   "go_models": 25,
   "workflows_audited": 4,
   "steps_audited": 7,
   "model_config_drift": {
     "detected": true,
-    "timestamp": "2026-08-03T22:43:34.664572+00:00",
+    "timestamp": "2026-08-04T12:36:43.178514+00:00",
     "livebench_snapshot": "2026_06_25",
     "current_workflows": {
       "opencode-issue-handler": {
@@ -63,7 +63,7 @@
       "recommended_free": "deepseek-v4-flash-free",
       "recommended_go": "qwen3.8-max",
       "preferred_tier": "go",
-      "preferred_diff": 35,
+      "preferred_diff": 11,
       "status": "\u2705"
     },
     {
@@ -76,10 +76,10 @@
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
       "recommended_free": "big-pickle",
-      "recommended_go": "qwen3.8-max",
-      "preferred_tier": "go",
-      "preferred_diff": 15,
-      "status": "\u2705"
+      "recommended_go": "big-pickle",
+      "preferred_tier": "free",
+      "preferred_diff": null,
+      "status": "\u2757"
     },
     {
       "file": ".github/workflows/opencode-maintenance.yaml",
@@ -91,10 +91,10 @@
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
       "recommended_free": "big-pickle",
-      "recommended_go": "qwen3.8-max",
-      "preferred_tier": "go",
-      "preferred_diff": 15,
-      "status": "\u274c"
+      "recommended_go": "big-pickle",
+      "preferred_tier": "free",
+      "preferred_diff": null,
+      "status": "\u2757"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -108,7 +108,7 @@
       "recommended_free": "deepseek-v4-flash-free",
       "recommended_go": "qwen3.8-max",
       "preferred_tier": "go",
-      "preferred_diff": 31,
+      "preferred_diff": 20,
       "status": "\u274c"
     },
     {
@@ -123,7 +123,7 @@
       "recommended_free": "deepseek-v4-flash-free",
       "recommended_go": "qwen3.8-max",
       "preferred_tier": "go",
-      "preferred_diff": 31,
+      "preferred_diff": 20,
       "status": "\u274c"
     },
     {
@@ -136,10 +136,10 @@
       "current_model_free": "opencode/nemotron-3-ultra-free",
       "auto": true,
       "recommended_free": "big-pickle",
-      "recommended_go": "qwen3.8-max",
-      "preferred_tier": "go",
-      "preferred_diff": 15,
-      "status": "\u274c"
+      "recommended_go": "big-pickle",
+      "preferred_tier": "free",
+      "preferred_diff": null,
+      "status": "\u2757"
     },
     {
       "file": ".github/workflows/opencode-pr-review.yml",
@@ -153,7 +153,7 @@
       "recommended_free": "deepseek-v4-flash-free",
       "recommended_go": "qwen3.8-max",
       "preferred_tier": "go",
-      "preferred_diff": 31,
+      "preferred_diff": 20,
       "status": "\u274c"
     }
   ]
