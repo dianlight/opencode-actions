@@ -31,6 +31,7 @@ jobs:
     outputs:
       process: ${{ steps.route.outputs.process }}
       task_args: ${{ steps.parse.outputs.TASK_ARGS }}
+      prev_task_args: ${{ steps.route.outputs.prev_task_args }}
       tier: ${{ steps.parse.outputs.TIER }}
     steps:
       - name: Checkout repository
@@ -69,6 +70,12 @@ jobs:
             if [[ -n "$PREV_BODY" ]]; then
               if echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+implement'; then
                 echo "process=process-5" >> "$GITHUB_OUTPUT"
+                # Recover the prior implement arguments (reuse auth.sh extraction)
+                PREV_AUTH_OUTPUT="$(mktemp)"
+                GITHUB_OUTPUT="$PREV_AUTH_OUTPUT" bash .github/scripts/auth.sh "$PREV_BODY"
+                sed -n '/^TASK_ARGS<<OCAUTH_EOF$/,/^OCAUTH_EOF$/p' "$PREV_AUTH_OUTPUT" \
+                  | sed '1s/^TASK_ARGS<</prev_task_args<</' >> "$GITHUB_OUTPUT"
+                rm -f "$PREV_AUTH_OUTPUT"
               else
                 echo "process=process-4" >> "$GITHUB_OUTPUT"
               fi
@@ -265,7 +272,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_TRIGGER_BODY: ${{ github.event.comment.body }}
-          OPENCODE_IMPLEMENT_ARGS: ${{ needs.route.outputs.task_args }}
+          OPENCODE_IMPLEMENT_ARGS: ${{ needs.route.outputs.prev_task_args || needs.route.outputs.task_args }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
