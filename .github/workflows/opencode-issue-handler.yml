@@ -59,13 +59,14 @@ jobs:
             # Find the last non-retry /oc or /ocf command and re-route
             PREV_BODY=$(gh api \
               --paginate \
+              --slurp \
               "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-              --jq '
-                [.[] | select(.body | test("^/ocf?( |$)")) |
+              | jq -r '
+                [.[] | .[] | select((.body // "") | test("^/ocf?([[:space:]]|$)")) |
                  select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR") |
                  .body] |
                 map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) |
-                last' \
+                last // empty'
             )
             if [[ -n "$PREV_BODY" ]]; then
               if echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+implement'; then
