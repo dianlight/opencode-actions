@@ -66,11 +66,35 @@ jobs:
 
       - name: Resolve model
         id: resolve
+        if: steps.pr-check.outputs.skip != 'true'
+        continue-on-error: true
         env:
           TIER: ${{ steps.parse.outputs.TIER }}
         run: |
           chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
           .github/scripts/resolve-model.sh opencode-pr-review review "${TIER}"
+
+      - name: Resolve model failure feedback
+        if: steps.pr-check.outputs.skip != 'true' && steps.resolve.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "❌ **Model resolution failed** — [View run details](${RUN_URL})"
+            echo ""
+            echo "No model could be resolved (config unreachable, invalid, or missing entry)."
+            echo "The OpenCode run was not attempted."
+          } > /tmp/oc-resolve-feedback.md
+          gh issue comment "$ISSUE_NUM" --body-file /tmp/oc-resolve-feedback.md
+          gh api --method POST \
+            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || \
+          gh api --method POST \
+            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || true
+          exit 1
 
       - name: Run opencode (PR code review)
         id: opencode

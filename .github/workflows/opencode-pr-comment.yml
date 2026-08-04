@@ -63,7 +63,12 @@ jobs:
             ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
             PREV_BODY=$(gh api \
               "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
-              --jq '[.[] | select(.body | test("^/ocf?( |$)")) | .body] | map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) | last' 2>/dev/null || echo "")
+              --jq '
+                [.[] | select(.body | test("^/ocf?( |$)")) |
+                 select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR") |
+                 .body] |
+                map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) |
+                last' 2>/dev/null || echo "")
 
             if [[ -n "$PREV_BODY" ]]; then
               if echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+task'; then
@@ -71,9 +76,10 @@ jobs:
               elif echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+implement'; then
                 PROCESS="process-3"
               else
-                PROCESS="process-2"
+                PROCESS="process-3"
               fi
-              echo "::notice::Retrying: $PREV_BODY → $PROCESS"
+              PREV_BODY_SAFE="$(printf '%s' "$PREV_BODY" | tr '\n' ' ')"
+              echo "::notice::Retrying: ${PREV_BODY_SAFE} → $PROCESS"
             else
               echo "::warning::No previous /oc command found to retry"
             fi
@@ -155,11 +161,35 @@ jobs:
 
       - name: Resolve model
         id: resolve
+        if: steps.thread-check.outputs.is_bot_thread == 'true'
+        continue-on-error: true
         env:
           TIER: ${{ needs.route.outputs.tier }}
         run: |
           chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
           .github/scripts/resolve-model.sh opencode-pr-comment process-2 "${TIER}"
+
+      - name: Resolve model failure feedback
+        if: steps.thread-check.outputs.is_bot_thread == 'true' && steps.resolve.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "❌ **Model resolution failed** — [View run details](${RUN_URL})"
+            echo ""
+            echo "No model could be resolved (config unreachable, invalid, or missing entry)."
+            echo "The OpenCode run was not attempted."
+          } > /tmp/oc-resolve-feedback.md
+          gh issue comment "$ISSUE_NUM" --body-file /tmp/oc-resolve-feedback.md
+          gh api --method POST \
+            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || \
+          gh api --method POST \
+            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || true
+          exit 1
 
       - name: Run opencode (Process 2 — Bot thread reply)
         id: opencode
@@ -257,11 +287,34 @@ jobs:
 
       - name: Resolve model
         id: resolve
+        continue-on-error: true
         env:
           TIER: ${{ needs.route.outputs.tier }}
         run: |
           chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
           .github/scripts/resolve-model.sh opencode-pr-comment process-3 "${TIER}"
+
+      - name: Resolve model failure feedback
+        if: steps.resolve.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "❌ **Model resolution failed** — [View run details](${RUN_URL})"
+            echo ""
+            echo "No model could be resolved (config unreachable, invalid, or missing entry)."
+            echo "The OpenCode run was not attempted."
+          } > /tmp/oc-resolve-feedback.md
+          gh issue comment "$ISSUE_NUM" --body-file /tmp/oc-resolve-feedback.md
+          gh api --method POST \
+            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || \
+          gh api --method POST \
+            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || true
+          exit 1
 
       - name: Run opencode (Process 3 — User-owned thread takeover)
         id: opencode
@@ -285,7 +338,7 @@ jobs:
 
             ## Context
             - Repo: ${{ github.repository }}
-            - PR: #${{ github.event.pull_request.number }}
+            - PR: #${{ github.event.issue.number || github.event.pull_request.number }}
             - Trigger: env `OPENCODE_TRIGGER_BODY`
 
             ## Output
@@ -377,17 +430,46 @@ jobs:
           ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
           PREV_BODY=$(gh api \
             "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
-            --jq '[.[] | select(.body | test("^/ocf?( |$)")) | .body] | map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) | last')
+            --jq '
+              [.[] | select(.body | test("^/ocf?( |$)")) |
+               select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR") |
+               .body] |
+              map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) |
+              last' \
+          )
           chmod +x .github/scripts/auth.sh 2>/dev/null || true
           .github/scripts/auth.sh "$PREV_BODY"
 
       - name: Resolve model
         id: resolve
+        continue-on-error: true
         env:
-          TIER: ${{ steps.parse.outputs.TIER || steps.retry-parse.outputs.TIER }}
+          TIER: ${{ steps.retry-parse.outputs.TIER || steps.parse.outputs.TIER }}
         run: |
           chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
           .github/scripts/resolve-model.sh opencode-pr-comment process-6 "${TIER}"
+
+      - name: Resolve model failure feedback
+        if: steps.resolve.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "❌ **Model resolution failed** — [View run details](${RUN_URL})"
+            echo ""
+            echo "No model could be resolved (config unreachable, invalid, or missing entry)."
+            echo "The OpenCode run was not attempted."
+          } > /tmp/oc-resolve-feedback.md
+          gh issue comment "$ISSUE_NUM" --body-file /tmp/oc-resolve-feedback.md
+          gh api --method POST \
+            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || \
+          gh api --method POST \
+            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || true
+          exit 1
 
       - name: Run opencode (Process 6 — PR Task Execution)
         id: opencode
@@ -411,12 +493,12 @@ jobs:
 
             ## Context
             - Repo: ${{ github.repository }}
-            - PR: #${{ github.event.pull_request.number }}
+            - PR: #${{ github.event.issue.number || github.event.pull_request.number }}
             - Task: env `OPENCODE_TASK_ARGS` (if empty, parse PR body for `- [ ]`)
 
             ## Workflow
             1. If OPENCODE_TASK_ARGS is set, use it. Else grab first `- [ ]` from PR body.
-            2. `gh pr checkout ${{ github.event.pull_request.number }}`
+            2. `gh pr checkout ${{ github.event.issue.number || github.event.pull_request.number }}`
             3. Implement, commit, push.
             4. Update PR checklist: `- [ ]` → `- [x]` via `gh pr edit`.
             5. Post summary: `gh pr comment` with ✅ and commit SHA.

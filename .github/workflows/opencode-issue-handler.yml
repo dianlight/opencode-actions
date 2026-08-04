@@ -58,14 +58,21 @@ jobs:
             # Find the last non-retry /oc or /ocf command and re-route
             PREV_BODY=$(gh api \
               "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-              --jq '[.[] | select(.body | test("^/ocf?( |$)")) | .body] | map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) | last')
+              --jq '
+                [.[] | select(.body | test("^/ocf?( |$)")) |
+                 select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR") |
+                 .body] |
+                map(select(test("^/ocf?[[:space:]]+retry[[:space:]]*$") | not)) |
+                last' \
+            )
             if [[ -n "$PREV_BODY" ]]; then
               if echo "$PREV_BODY" | grep -qE '^/ocf?[[:space:]]+implement'; then
                 echo "process=process-5" >> "$GITHUB_OUTPUT"
               else
                 echo "process=process-4" >> "$GITHUB_OUTPUT"
               fi
-              echo "::notice::Retrying: $PREV_BODY"
+              PREV_BODY_SAFE="$(printf '%s' "$PREV_BODY" | tr '\n' ' ')"
+              echo "::notice::Retrying: ${PREV_BODY_SAFE}"
             else
               echo "process=skip" >> "$GITHUB_OUTPUT"
               echo "::warning::No previous /oc command found to retry"
@@ -92,11 +99,33 @@ jobs:
 
       - name: Resolve model
         id: resolve
+        continue-on-error: true
         env:
           TIER: ${{ needs.route.outputs.tier }}
         run: |
           chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
           .github/scripts/resolve-model.sh opencode-issue-handler process-4 "${TIER}"
+
+      - name: Resolve model failure feedback
+        if: steps.resolve.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "❌ **Model resolution failed** — [View run details](${RUN_URL})"
+            echo ""
+            echo "No model could be resolved (config unreachable, invalid, or missing entry)."
+            echo "The OpenCode run was not attempted."
+          } > /tmp/oc-resolve-feedback.md
+          gh issue comment ${{ github.event.issue.number }} --body-file /tmp/oc-resolve-feedback.md
+          gh api --method POST \
+            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || \
+          gh api --method POST \
+            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || true
+          exit 1
 
       - name: Run opencode (Process 4 — Issue Review & Refinement)
         id: opencode
@@ -198,11 +227,33 @@ jobs:
 
       - name: Resolve model
         id: resolve
+        continue-on-error: true
         env:
           TIER: ${{ needs.route.outputs.tier }}
         run: |
           chmod +x .github/scripts/resolve-model.sh 2>/dev/null || true
           .github/scripts/resolve-model.sh opencode-issue-handler process-5 "${TIER}"
+
+      - name: Resolve model failure feedback
+        if: steps.resolve.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "❌ **Model resolution failed** — [View run details](${RUN_URL})"
+            echo ""
+            echo "No model could be resolved (config unreachable, invalid, or missing entry)."
+            echo "The OpenCode run was not attempted."
+          } > /tmp/oc-resolve-feedback.md
+          gh issue comment ${{ github.event.issue.number }} --body-file /tmp/oc-resolve-feedback.md
+          gh api --method POST \
+            "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || \
+          gh api --method POST \
+            "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='-1' 2>/dev/null || true
+          exit 1
 
       - name: Run opencode (Process 5 — Issue Work & PR Creation)
         id: opencode
