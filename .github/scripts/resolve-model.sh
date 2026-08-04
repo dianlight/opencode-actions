@@ -72,7 +72,24 @@ workflow, job, path = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
     with open(path) as fh:
         data = json.load(fh)
-    entry = ((data.get("workflows") or {}).get(workflow) or {}).get(job, {})
+    workflows = data.get("workflows")
+    if workflows is not None and not isinstance(workflows, dict):
+        raise ValueError("'workflows' must be an object")
+    mapping = (workflows or {}).get(workflow)
+    if mapping is not None and not isinstance(mapping, dict):
+        raise ValueError(f"workflow '{workflow}' must be an object")
+    if not mapping:
+        entry = {}
+    else:
+        entry = mapping.get(job)
+        if entry is None:
+            entry = {}
+        elif not isinstance(entry, dict):
+            raise ValueError(f"job '{job}' must be an object")
+    for key in ("go", "free"):
+        value = entry.get(key)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"tier '{key}' must be a string")
 except Exception as exc:
     print(f"::error::Invalid or unreadable model config {path}: {exc}", file=sys.stderr)
     sys.exit(4)

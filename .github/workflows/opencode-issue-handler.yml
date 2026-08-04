@@ -57,6 +57,7 @@ jobs:
           elif [[ "$SUBCOMMAND" == "retry" ]]; then
             # Find the last non-retry /oc or /ocf command and re-route
             PREV_BODY=$(gh api \
+              --paginate \
               "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
               --jq '
                 [.[] | select(.body | test("^/ocf?( |$)")) |
