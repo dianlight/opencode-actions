@@ -20,6 +20,15 @@
   the job grants `pull-requests: write` so the OpenCode CLI can open the PR it
   wraps task changes in (previously `403 Resource not accessible by integration`)
   after the task itself succeeded
+- Fix the opencode-pr-comment workflow failing with
+  `fatal: could not read Username for 'https://github.com'` during the OpenCode
+  step's `git push` (process-3): with `use_github_token: true` the OpenCode CLI
+  skips configuring git credentials, so push-capable jobs must persist the
+  `actions/checkout` token and grant `contents: write`. process-3 now persists
+  credentials, configures the git identity, and grants `contents: write`;
+  process-6 also grants `contents: write` for its push path
+
+Resolves #31
 
 
 ## [0.1.0]
