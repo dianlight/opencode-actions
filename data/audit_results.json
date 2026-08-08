@@ -1,15 +1,15 @@
 {
-  "timestamp": "2026-08-04T12:39:23.591561+00:00",
+  "timestamp": "2026-08-08T00:25:49.947082+00:00",
   "livebench_snapshot": "2026_06_25",
   "livebench_source": "https://livebench.ai/table_2026_06_25.csv",
-  "livebench_models": 326,
-  "free_models": 7,
+  "livebench_models": 327,
+  "free_models": 9,
   "go_models": 25,
   "workflows_audited": 4,
   "steps_audited": 7,
   "model_config_drift": {
     "detected": false,
-    "timestamp": "2026-08-04T12:39:23.591566+00:00",
+    "timestamp": "2026-08-08T00:25:49.947088+00:00",
     "livebench_snapshot": "2026_06_25",
     "current_workflows": {}
   },

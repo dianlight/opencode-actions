@@ -21,5 +21,14 @@
       }
     }
   ],
-  "missing_scores": []
+  "missing_scores": [
+    {
+      "model": "ling-3.0-tiny-free",
+      "tier": "Free"
+    },
+    {
+      "model": "longcat-2.0-free",
+      "tier": "Free"
+    }
+  ]
 }
