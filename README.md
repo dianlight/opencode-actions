@@ -9,8 +9,8 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-08-08 00:25 UTC**.
-> LiveBench data: **327 models scored**.
+> Last updated: **2026-08-15 00:19 UTC**.
+> LiveBench data: **331 models scored**.
 > LiveBench snapshot: **2026_06_25**.
 > Source: https://livebench.ai/table_2026_06_25.csv
 > Free-first threshold: **5%**.
@@ -40,18 +40,17 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `glm-5` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
 | `glm-5.1` | Go (Paid) | ✅ LiveBench | Plan, Review | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
 | `glm-5.2` | Go (Paid) | ✅ LiveBench | Plan, Review | 73.4 | 62.9 | 82.1 | 60.7 | 68.2 |
+| `glm-5.3` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
 | `gpt-5.6-luna` | Go (Paid) | ✅ LiveBench | Plan, Review | 73.7 | 62.2 | 84.8 | 51.2 | 66.6 |
 | `grok-4.5` | Go (Paid) | ✅ LiveBench | Plan, Review | 77.1 | 61.3 | 86.9 | 66.4 | 73.9 |
 | `hy3` | Go (Paid) | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
+| `hy3-free` | Free | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
 | `hy3-preview` | Go (Paid) | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
 | `kimi-k2.5` | Go (Paid) | ✅ LiveBench | Plan, Review | 69.2 | 60.1 | 76.7 | 55.0 | 65.3 |
 | `kimi-k2.6` | Go (Paid) | ✅ LiveBench | Plan, Review | 70.9 | 59.6 | 77.9 | 58.1 | 69.7 |
 | `kimi-k2.7-code` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.8 | 57.0 | 76.9 | 55.7 | 65.9 |
 | `kimi-k3` | Go (Paid) | ✅ LiveBench | Plan, Review | 79.5 | 69.9 | 87.0 | 72.6 | 74.9 |
 | `laguna-s-2.1-free` | Free | 📋 Fallback | Ask, Triage | 45.0 | 52.0 | 48.0 | 40.0 | 54.0 |
-| `ling-3.0-flash-free` | Free | 📋 Fallback | Ask, Triage | 45.0 | 48.0 | 48.0 | 40.0 | 50.0 |
-| `ling-3.0-tiny-free` | Free | ❌ Missing | — | — | — | — | — | — |
-| `longcat-2.0-free` | Free | ❌ Missing | — | — | — | — | — | — |
 | `mimo-v2-omni` | Go (Paid) | 📋 Fallback | Design, Ask | 50.0 | 42.0 | 48.0 | 55.0 | 50.0 |
 | `mimo-v2-pro` | Go (Paid) | ✅ LiveBench | Plan, Review | 58.4 | 45.5 | 65.8 | 43.6 | 57.8 |
 | `mimo-v2.5` | Go (Paid) | 📋 Fallback | Ask, Triage | 62.0 | 60.0 | 64.0 | 58.0 | 65.0 |
@@ -61,7 +60,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `minimax-m2.7` | Go (Paid) | ✅ LiveBench | Plan, Review | 65.0 | 52.0 | 72.4 | 34.0 | 67.4 |
 | `minimax-m3` | Go (Paid) | ✅ LiveBench | Plan, Review | 67.5 | 51.7 | 76.7 | 50.2 | 66.9 |
 | `nemotron-3-ultra-free` | Free | ✅ LiveBench | Ask, Triage | 50.7 | 56.5 | 42.9 | 36.5 | 62.5 |
-| `north-mini-code-free` | Free | 📋 Fallback | Ask, Triage | 32.0 | 35.0 | 38.0 | 5.0 | 40.0 |
+| `nemotron-3.5-lightning-free` | Free | ❌ Missing | — | — | — | — | — | — |
 | `qwen3.5-plus` | Go (Paid) | 📋 Fallback | Plan, Review | 58.0 | 52.0 | 62.0 | 42.0 | 60.0 |
 | `qwen3.6-plus` | Go (Paid) | ✅ LiveBench | Plan, Review | 69.0 | 56.1 | 77.0 | 52.5 | 67.7 |
 | `qwen3.7-max` | Go (Paid) | ✅ LiveBench | Plan, Review | 74.1 | 55.8 | 82.4 | 58.7 | 76.6 |
@@ -70,7 +69,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-08-08 00:25 UTC**
+> Audited: **2026-08-15 00:19 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 

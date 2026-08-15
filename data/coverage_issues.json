@@ -23,11 +23,7 @@
   ],
   "missing_scores": [
     {
-      "model": "ling-3.0-tiny-free",
-      "tier": "Free"
-    },
-    {
-      "model": "longcat-2.0-free",
+      "model": "nemotron-3.5-lightning-free",
       "tier": "Free"
     }
   ]
