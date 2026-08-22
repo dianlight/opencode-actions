@@ -23,7 +23,19 @@
   ],
   "missing_scores": [
     {
+      "model": "muse-spark-1.2-contributor",
+      "tier": "Go (Paid)"
+    },
+    {
+      "model": "muse-spark-1.2-contributor-free",
+      "tier": "Free"
+    },
+    {
       "model": "nemotron-3.5-lightning-free",
+      "tier": "Free"
+    },
+    {
+      "model": "x-preview-f-free",
       "tier": "Free"
     }
   ]

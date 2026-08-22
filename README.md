@@ -9,8 +9,8 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-08-15 00:19 UTC**.
-> LiveBench data: **331 models scored**.
+> Last updated: **2026-08-22 00:19 UTC**.
+> LiveBench data: **333 models scored**.
 > LiveBench snapshot: **2026_06_25**.
 > Source: https://livebench.ai/table_2026_06_25.csv
 > Free-first threshold: **5%**.
@@ -36,6 +36,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `big-pickle` | Free | 📋 Fallback | Code, Impl | 61.5 | 67.0 | 61.5 | 8.0 | 60.0 |
 | `deepseek-v4-flash` | Go (Paid) | ✅ LiveBench | Plan, Review | 66.1 | 50.3 | 73.1 | 46.9 | 69.4 |
 | `deepseek-v4-flash-free` | Free | ✅ LiveBench | Plan, Review | 66.1 | 50.3 | 73.1 | 46.9 | 69.4 |
+| `deepseek-v4-flash-vision-exp` | Go (Paid) | ✅ LiveBench | Plan, Review | 66.1 | 50.3 | 73.1 | 46.9 | 69.4 |
 | `deepseek-v4-pro` | Go (Paid) | ✅ LiveBench | Plan, Review | 72.6 | 53.6 | 83.9 | 56.4 | 70.3 |
 | `glm-5` | Go (Paid) | ✅ LiveBench | Plan, Review | 68.7 | 62.5 | 74.0 | 63.6 | 65.0 |
 | `glm-5.1` | Go (Paid) | ✅ LiveBench | Plan, Review | 70.6 | 63.1 | 75.6 | 60.3 | 69.5 |
@@ -59,17 +60,21 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `minimax-m2.5` | Go (Paid) | ✅ LiveBench | Plan, Review | 60.3 | 59.3 | 62.3 | 31.3 | 62.2 |
 | `minimax-m2.7` | Go (Paid) | ✅ LiveBench | Plan, Review | 65.0 | 52.0 | 72.4 | 34.0 | 67.4 |
 | `minimax-m3` | Go (Paid) | ✅ LiveBench | Plan, Review | 67.5 | 51.7 | 76.7 | 50.2 | 66.9 |
+| `muse-spark-1.2-contributor` | Go (Paid) | ❌ Missing | — | — | — | — | — | — |
+| `muse-spark-1.2-contributor-free` | Free | ❌ Missing | — | — | — | — | — | — |
 | `nemotron-3-ultra-free` | Free | ✅ LiveBench | Ask, Triage | 50.7 | 56.5 | 42.9 | 36.5 | 62.5 |
 | `nemotron-3.5-lightning-free` | Free | ❌ Missing | — | — | — | — | — | — |
+| `ox-alpha-free` | Go (Paid) | ✅ LiveBench | Plan, Review | 69.2 | 61.9 | 74.8 | 53.1 | 67.9 |
 | `qwen3.5-plus` | Go (Paid) | 📋 Fallback | Plan, Review | 58.0 | 52.0 | 62.0 | 42.0 | 60.0 |
 | `qwen3.6-plus` | Go (Paid) | ✅ LiveBench | Plan, Review | 69.0 | 56.1 | 77.0 | 52.5 | 67.7 |
 | `qwen3.7-max` | Go (Paid) | ✅ LiveBench | Plan, Review | 74.1 | 55.8 | 82.4 | 58.7 | 76.6 |
 | `qwen3.7-plus` | Go (Paid) | 📋 Fallback | Plan, Ask | 66.0 | 62.0 | 72.0 | 62.0 | 72.0 |
 | `qwen3.8-max` | Go (Paid) | ✅ LiveBench | Plan, Review | 79.5 | 67.9 | 87.9 | 58.6 | 77.2 |
+| `x-preview-f-free` | Free | ❌ Missing | — | — | — | — | — | — |
 
 ## Workflow Model Audit
 
-> Audited: **2026-08-15 00:19 UTC**
+> Audited: **2026-08-22 00:19 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 
