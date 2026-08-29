@@ -23,6 +23,14 @@
   ],
   "missing_scores": [
     {
+      "model": "hy4-preview",
+      "tier": "Go (Paid)"
+    },
+    {
+      "model": "longcat-2.0",
+      "tier": "Go (Paid)"
+    },
+    {
       "model": "muse-spark-1.2-contributor",
       "tier": "Go (Paid)"
     },
@@ -32,10 +40,6 @@
     },
     {
       "model": "nemotron-3.5-lightning-free",
-      "tier": "Free"
-    },
-    {
-      "model": "x-preview-f-free",
       "tier": "Free"
     }
   ]

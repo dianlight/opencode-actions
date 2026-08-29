@@ -1,17 +1,54 @@
 {
-  "timestamp": "2026-08-22T00:19:30.531050+00:00",
+  "timestamp": "2026-08-29T00:41:50.221966+00:00",
   "livebench_snapshot": "2026_06_25",
   "livebench_source": "https://livebench.ai/table_2026_06_25.csv",
-  "livebench_models": 333,
+  "livebench_models": 337,
   "free_models": 9,
-  "go_models": 29,
+  "go_models": 33,
   "workflows_audited": 4,
   "steps_audited": 7,
   "model_config_drift": {
-    "detected": false,
-    "timestamp": "2026-08-22T00:19:30.531056+00:00",
+    "detected": true,
+    "timestamp": "2026-08-29T00:41:50.221975+00:00",
     "livebench_snapshot": "2026_06_25",
-    "current_workflows": {}
+    "current_workflows": {
+      "opencode-issue-handler": {
+        "process-4": {
+          "go": "opencode-go/qwen3.8-max",
+          "free": "opencode/deepseek-v4-flash-free"
+        },
+        "process-5": {
+          "go": "opencode/big-pickle",
+          "free": "opencode/big-pickle"
+        }
+      },
+      "opencode-maintenance": {
+        "handle-checkbox-task": {
+          "go": "opencode/big-pickle",
+          "free": "opencode/big-pickle"
+        }
+      },
+      "opencode-pr-comment": {
+        "process-2": {
+          "go": "opencode-go/qwen3.8-max",
+          "free": "opencode/deepseek-v4-flash-free"
+        },
+        "process-3": {
+          "go": "opencode-go/qwen3.8-max",
+          "free": "opencode/deepseek-v4-flash-free"
+        },
+        "process-6": {
+          "go": "opencode/big-pickle",
+          "free": "opencode/big-pickle"
+        }
+      },
+      "opencode-pr-review": {
+        "review": {
+          "go": "opencode-go/qwen3.8-max",
+          "free": "opencode/deepseek-v4-flash-free"
+        }
+      }
+    }
   },
   "results": [
     {
@@ -69,10 +106,10 @@
       "current_model_free": "opencode/deepseek-v4-flash-free",
       "auto": true,
       "recommended_free": "deepseek-v4-flash-free",
-      "recommended_go": "qwen3.8-max",
+      "recommended_go": "grok-4.6",
       "preferred_tier": "go",
-      "preferred_diff": 20,
-      "status": "\u2705"
+      "preferred_diff": 22,
+      "status": "\u274c"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -84,10 +121,10 @@
       "current_model_free": "opencode/deepseek-v4-flash-free",
       "auto": true,
       "recommended_free": "deepseek-v4-flash-free",
-      "recommended_go": "qwen3.8-max",
+      "recommended_go": "grok-4.6",
       "preferred_tier": "go",
-      "preferred_diff": 20,
-      "status": "\u2705"
+      "preferred_diff": 22,
+      "status": "\u274c"
     },
     {
       "file": ".github/workflows/opencode-pr-comment.yml",
@@ -114,10 +151,10 @@
       "current_model_free": "opencode/deepseek-v4-flash-free",
       "auto": true,
       "recommended_free": "deepseek-v4-flash-free",
-      "recommended_go": "qwen3.8-max",
+      "recommended_go": "grok-4.6",
       "preferred_tier": "go",
-      "preferred_diff": 20,
-      "status": "\u2705"
+      "preferred_diff": 22,
+      "status": "\u274c"
     }
   ]
 }
