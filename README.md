@@ -9,7 +9,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 ## Model Recommendations by Task Type
 
 > Automatically updated by `opencode-maintenance` workflow.
-> Last updated: **2026-08-29 00:41 UTC**.
+> Last updated: **2026-09-01 00:55 UTC**.
 > LiveBench data: **337 models scored**.
 > LiveBench snapshot: **2026_06_25**.
 > Source: https://livebench.ai/table_2026_06_25.csv
@@ -47,7 +47,6 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 | `grok-4.5` | Go (Paid) | ✅ LiveBench | Plan, Review | 77.1 | 61.3 | 86.9 | 66.4 | 73.9 |
 | `grok-4.6` | Go (Paid) | ✅ LiveBench | Plan, Review | 79.0 | 64.9 | 89.1 | 67.1 | 74.3 |
 | `hy3` | Go (Paid) | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
-| `hy3-free` | Free | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
 | `hy3-preview` | Go (Paid) | 📋 Fallback | Plan, Review | 54.0 | 55.0 | 60.0 | 8.0 | 58.0 |
 | `hy4-preview` | Go (Paid) | ❌ Missing | — | — | — | — | — | — |
 | `kimi-k2.5` | Go (Paid) | ✅ LiveBench | Plan, Review | 69.2 | 60.1 | 76.7 | 55.0 | 65.3 |
@@ -78,7 +77,7 @@ Main repository form my Opencode Github Actions to share to multiple repository 
 
 ## Workflow Model Audit
 
-> Audited: **2026-08-29 00:41 UTC**
+> Audited: **2026-09-01 00:55 UTC**
 > Workflows checked: **4**
 > OpenCode steps found: **7**
 
